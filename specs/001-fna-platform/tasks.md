@@ -179,8 +179,10 @@
 - [ ] T086 [P] Optimize database queries and add missing indexes
 - [ ] T087 [P] Create deployment scripts and production configuration
 - [ ] T088 Run quickstart.md validation to ensure setup process works
-- [ ] T089 Performance optimization and load testing validation
-- [ ] T090 Security audit and penetration testing
+- [ ] T089 [P] Implement accuracy validation system for FR-011 compliance (85% sentiment classification vs human experts)
+- [ ] T090 [P] Create data retention and lifecycle management system for FR-015 indefinite storage requirements
+- [ ] T091 Performance optimization and load testing validation
+- [ ] T092 Security audit and penetration testing
 
 ---
 
@@ -267,14 +269,14 @@ With multiple developers:
 
 ## Task Count Summary
 
-- **Total Tasks**: 90 tasks
+- **Total Tasks**: 92 tasks
 - **Setup Phase**: 11 tasks
 - **Foundational Phase**: 10 tasks (BLOCKING)
 - **User Story 1 (MVP)**: 21 tasks
 - **User Story 2**: 9 tasks
 - **User Story 3**: 14 tasks
 - **User Story 4**: 11 tasks
-- **Polish Phase**: 14 tasks
+- **Polish Phase**: 16 tasks
 
 ### Parallel Opportunities Identified
 
@@ -292,7 +294,7 @@ With multiple developers:
 
 ### Suggested MVP Scope
 
-**Minimum Viable Product**: Complete Phases 1-3 only (Tasks T001-T042)
+**Minimum Viable Product**: Complete Phases 1-3 only (Tasks T001-T042) - 42 tasks total
 - Core functionality: Upload reports, auto-download from SEC, multi-dimensional analysis
 - Essential features: User authentication, company management, sentiment analysis
 - Ready for market validation with core value proposition

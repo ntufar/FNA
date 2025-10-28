@@ -72,18 +72,18 @@ A research firm integrates FNA sentiment data into their existing investment res
 
 ---
 
-### Edge Cases
+### Edge Cases & Error Handling Requirements
 
-- What happens when a report contains no meaningful narrative sections (only financial tables)?
-- How does the system handle reports in languages other than English?
-- What occurs when uploaded files are corrupted or password-protected?
-- How does the system respond when analysis confidence is below acceptable thresholds?
-- What happens when comparing reports from different industries with varying disclosure standards?
-- What occurs when SEC.gov is temporarily unavailable or rate-limits requests?
-- How does the system handle invalid or non-existent company ticker symbols?
-- What happens when the requested company has no recent filings available?
-- How does the system process iXBRL files that have malformed or incomplete structured data?
-- What occurs when automatic downloads fail due to network connectivity issues?
+- **EC-001**: WHEN a report contains no meaningful narrative sections (only financial tables), THEN the system MUST return an error message indicating insufficient text content and suggest alternative document formats
+- **EC-002**: WHEN reports are in languages other than English, THEN the system MUST detect the language and display a clear message that only English-language documents are supported in this version
+- **EC-003**: WHEN uploaded files are corrupted or password-protected, THEN the system MUST validate file integrity and return specific error messages with suggested remediation steps
+- **EC-004**: WHEN analysis confidence falls below 70% threshold, THEN the system MUST flag the analysis as low-confidence and prompt user to review results manually
+- **EC-005**: WHEN comparing reports from different industries, THEN the system MUST display a warning about potential industry-specific language differences and allow user to proceed with comparison
+- **EC-006**: WHEN SEC.gov is temporarily unavailable or rate-limits requests, THEN the system MUST implement exponential backoff retry logic and inform users of temporary service unavailability
+- **EC-007**: WHEN users provide invalid or non-existent company ticker symbols, THEN the system MUST validate tickers against a known database and suggest similar valid tickers
+- **EC-008**: WHEN requested companies have no recent filings available, THEN the system MUST indicate the most recent filing date and suggest alternative report types or manual upload
+- **EC-009**: WHEN iXBRL files have malformed or incomplete structured data, THEN the system MUST attempt graceful degradation to text-only analysis and log parsing errors for investigation
+- **EC-010**: WHEN automatic downloads fail due to network connectivity, THEN the system MUST retry with exponential backoff up to 3 attempts and provide clear error messaging with manual upload option
 
 ## Requirements *(mandatory)*
 

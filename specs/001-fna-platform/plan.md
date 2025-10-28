@@ -23,13 +23,7 @@ AI-powered Financial Narrative Analyzer platform that automatically downloads fi
 **Constraints**: ≥85% sentiment analysis accuracy, ≥95% system uptime, <500ms integration API responses, batch limit 10 reports  
 **Scale/Scope**: Multi-tenant SaaS platform with tiered access (Basic/Pro/Enterprise), unlimited historical data retention, cross-referenced financial analysis
 
-**Technical Clarifications Needed**:
-- Qwen3-4B deployment strategy: NEEDS CLARIFICATION (LM Studio local vs cloud hosting vs self-deployed)
-- iXBRL parsing library selection: NEEDS CLARIFICATION (specific Python library for SEC filing format)
-- SEC.gov integration method: NEEDS CLARIFICATION (EDGAR API endpoints, rate limiting strategy)
-- Model quantization approach: NEEDS CLARIFICATION (GGUF 4-bit implementation details)
-- Vector embedding model choice: NEEDS CLARIFICATION (sentence-transformers model for financial text)
-- Frontend deployment strategy: NEEDS CLARIFICATION (CDN, build process, environment management)
+**Technical Decisions Finalized**: All clarifications resolved - see research.md for detailed technology choices and implementation strategies.
 
 ## Constitution Check
 

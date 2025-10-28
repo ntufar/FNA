@@ -130,17 +130,42 @@ is limited.
                       IBM Granite 4.0 H Tiny     comprehension and reasoning
                                                   (4B parameters recommended)
 
-  **Embedding Store** ChromaDB or FAISS           Vector retrieval for
-                                                  context and comparison
+  **Data Storage**    SQLite + Local Filesystem   All structured data, metadata,
+                                                  analytics results, and file
+                                                  storage in single database
 
-  **Data Storage**    PostgreSQL + MinIO (for     Stores metadata, reports,
-                      files)                      and analytics results
+  **Vector Search**   SQLite-VSS or FAISS         Embeddings and similarity
+                      (local files)              search (lightweight options)
 
   **Visualization**   Plotly or Recharts          Sentiment trends and
                                                   comparisons
   ---------------------------------------------------------------------------
 
-### **6.1 Model Comparison & Selection**
+### **6.1 Simplified Storage Architecture Benefits**
+
+  ---------------------------------------------------------------------------
+  Component           Traditional Setup       Simplified SQLite Setup
+  ------------------- ----------------------- ---------------------------
+  **Database**        PostgreSQL server       Single SQLite file
+                      (installation,          (zero-config, embedded)
+                      configuration, 
+                      maintenance)
+
+  **File Storage**    MinIO object storage    Local filesystem
+                      (S3-compatible API,     (simple file operations)
+                      separate service)
+
+  **Vector Search**   ChromaDB server         SQLite-VSS extension or
+                      (additional service)    FAISS local files
+
+  **Deployment**      3+ separate services    Single Python application
+                      (complex orchestration) (simple deployment)
+
+  **Development**     Multiple containers     `python main.py` and done
+                      or services to manage   (instant local development)
+  ---------------------------------------------------------------------------
+
+### **6.2 Model Comparison & Selection**
 
   ---------------------------------------------------------------------------
   Model               Parameters    Advantages              Best Use Case
@@ -214,6 +239,10 @@ is limited.
   Cost of LLM inference  Use Qwen3-4B (60% smaller than 7B models),
                          GGUF 4-bit quantization, cache embeddings,
                          async processing for efficiency
+
+  Infrastructure        Single SQLite database eliminates multiple
+  complexity             service dependencies, reduces deployment
+                         complexity and operational overhead
   -----------------------------------------------------------------------
 
 ## **12. Timeline**

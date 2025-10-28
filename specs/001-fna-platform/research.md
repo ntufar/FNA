@@ -145,3 +145,4 @@ bnb_config = BitsAndBytesConfig(
 | **Frontend** | React + TypeScript + Vite + Vercel | Modern stack, optimized builds, scalable deployment |
 
 All choices align with constitution requirements and provide clear migration paths for future scaling needs.
+

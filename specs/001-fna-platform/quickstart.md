@@ -375,3 +375,4 @@ with get_db_session() as session:
 - **API Reference**: Interactive docs at `/docs` endpoint when backend is running
 
 **Estimated Setup Time**: 10-15 minutes on modern hardware with stable internet connection.
+

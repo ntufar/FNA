@@ -245,3 +245,4 @@ Based on expected usage (100 companies, 400 reports/year, 5-year retention):
 **File storage growth**: ~2GB/year (average 1MB per report)
 
 Vector search performance should remain sub-200ms with proper indexing up to 100K embeddings.
+

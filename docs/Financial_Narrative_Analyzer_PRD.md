@@ -116,24 +116,19 @@ is limited.
 
 ## **6. Technical Overview**
 
-### **6.1 Recommended Architecture (Hybrid Approach)**
-
   ---------------------------------------------------------------------------
   Layer               Components                  Description
   ------------------- --------------------------- ---------------------------
   **Frontend**        React + Tailwind            Interactive dashboard and
                                                   upload interface
 
-  **API Gateway**     Go + Gin/Echo               High-performance REST API,
-                                                  file processing, concurrent
-                                                  report ingestion
-
-  **ML Service**      Python + FastAPI            LLM inference, embeddings,
-                                                  sentiment analysis pipeline
+  **Backend**         FastAPI / Python            Handles ingestion, parsing,
+                                                  analysis, storage, and API
+                                                  endpoints
 
   **Model**           Qwen3-4B-2507 or           Optimized for financial text
                       IBM Granite 4.0 H Tiny     comprehension and reasoning
-                                                  (4B vs 7B parameters)
+                                                  (4B parameters recommended)
 
   **Embedding Store** ChromaDB or FAISS           Vector retrieval for
                                                   context and comparison
@@ -145,7 +140,7 @@ is limited.
                                                   comparisons
   ---------------------------------------------------------------------------
 
-### **6.2 Model Comparison & Selection**
+### **6.1 Model Comparison & Selection**
 
   ---------------------------------------------------------------------------
   Model               Parameters    Advantages              Best Use Case
@@ -218,7 +213,7 @@ is limited.
 
   Cost of LLM inference  Use Qwen3-4B (60% smaller than 7B models),
                          GGUF 4-bit quantization, cache embeddings,
-                         Go backend for efficient preprocessing
+                         async processing for efficiency
   -----------------------------------------------------------------------
 
 ## **12. Timeline**
@@ -226,8 +221,8 @@ is limited.
   -----------------------------------------------------------------------
   Phase            Duration               Deliverables
   ---------------- ---------------------- -------------------------------
-  **Phase 1 --     6 weeks                Go API gateway, Python ML service,
-  MVP**                                   Qwen3-4B integration, basic UI
+  **Phase 1 --     6 weeks                FastAPI backend, Qwen3-4B integration,
+  MVP**                                   ingestion, tone analysis, basic UI
 
   **Phase 2 --     4 weeks                Dashboard, API endpoints
   Visualization &                         

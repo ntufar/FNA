@@ -116,18 +116,24 @@ is limited.
 
 ## **6. Technical Overview**
 
+### **6.1 Recommended Architecture (Hybrid Approach)**
+
   ---------------------------------------------------------------------------
   Layer               Components                  Description
   ------------------- --------------------------- ---------------------------
   **Frontend**        React + Tailwind            Interactive dashboard and
                                                   upload interface
 
-  **Backend**         FastAPI / Python            Handles ingestion, parsing,
-                                                  analysis, storage
+  **API Gateway**     Go + Gin/Echo               High-performance REST API,
+                                                  file processing, concurrent
+                                                  report ingestion
 
-  **Model**           Small LLM (e.g., Mistral    Used for tone, sentiment,
-                      7B, Phi-3-mini) fine-tuned  and risk extraction
-                      on financial texts          
+  **ML Service**      Python + FastAPI            LLM inference, embeddings,
+                                                  sentiment analysis pipeline
+
+  **Model**           Qwen3-4B-2507 or           Optimized for financial text
+                      IBM Granite 4.0 H Tiny     comprehension and reasoning
+                                                  (4B vs 7B parameters)
 
   **Embedding Store** ChromaDB or FAISS           Vector retrieval for
                                                   context and comparison
@@ -137,6 +143,22 @@ is limited.
 
   **Visualization**   Plotly or Recharts          Sentiment trends and
                                                   comparisons
+  ---------------------------------------------------------------------------
+
+### **6.2 Model Comparison & Selection**
+
+  ---------------------------------------------------------------------------
+  Model               Parameters    Advantages              Best Use Case
+  ------------------- ------------- ----------------------- -----------------
+  **Qwen3-4B-2507**   4B dense      256K context, enhanced Financial document
+  (Recommended)                     text comprehension,     analysis, long
+                                    2GB memory requirement  reports
+
+  **Granite 4.0 H**   7B/1B active  Tool-use training,     API integration,
+  **Tiny**                          enterprise backing     structured tasks
+
+  **Mistral 7B**      7B dense      General purpose,       Baseline option
+  (Original)                        proven performance     
   ---------------------------------------------------------------------------
 
 ## **7. Data Sources**
@@ -194,8 +216,9 @@ is limited.
 
   Model drift            Regular retraining with latest filings
 
-  Cost of LLM inference  Use quantized small models (GGUF 4-bit) and
-                         cache embeddings
+  Cost of LLM inference  Use Qwen3-4B (60% smaller than 7B models),
+                         GGUF 4-bit quantization, cache embeddings,
+                         Go backend for efficient preprocessing
   -----------------------------------------------------------------------
 
 ## **12. Timeline**
@@ -203,8 +226,8 @@ is limited.
   -----------------------------------------------------------------------
   Phase            Duration               Deliverables
   ---------------- ---------------------- -------------------------------
-  **Phase 1 --     6 weeks                Ingestion, tone analysis, delta
-  MVP**                                   computation, simple UI
+  **Phase 1 --     6 weeks                Go API gateway, Python ML service,
+  MVP**                                   Qwen3-4B integration, basic UI
 
   **Phase 2 --     4 weeks                Dashboard, API endpoints
   Visualization &                         

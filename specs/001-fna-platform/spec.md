@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-fna-platform`  
 **Created**: 2025-10-29  
-**Status**: Draft  
+**Status**: Clarified  
 **Input**: User description: "Financial Narrative Analyzer platform for reading, interpreting, and comparing narrative tone and strategic messaging in corporate financial reports"
 
 ## User Scenarios & Testing *(mandatory)*
@@ -17,9 +17,9 @@ An equity analyst either uploads a company's latest 10-K filing or searches for 
 
 **Acceptance Scenarios**:
 
-1. **Given** a user enters a company ticker symbol, **When** they request the latest filing, **Then** the system automatically downloads the most recent 10-K or 10-Q from SEC.gov and processes it within 60 seconds
+1. **Given** a user enters a company ticker symbol, **When** they request the latest filing, **Then** the system automatically downloads the most recent 10-K filing by default from SEC.gov and processes it within 60 seconds
 2. **Given** a user uploads a financial report file, **When** they submit it via the dashboard, **Then** the system processes it and displays sentiment analysis within 60 seconds  
-3. **Given** a processed report (uploaded or downloaded), **When** the user views the analysis, **Then** they see tone classification (positive/neutral/negative/uncertain) and key narrative themes
+3. **Given** a processed report (uploaded or downloaded), **When** the user views the analysis, **Then** they see multi-dimensional scores for optimism, risk, and uncertainty with confidence levels, plus key narrative themes
 4. **Given** an unsupported file format on upload, **When** the user attempts upload, **Then** the system displays a clear error message with supported formats (PDF, HTML, TXT, iXBRL)
 
 ---
@@ -91,9 +91,9 @@ A research firm integrates FNA sentiment data into their existing investment res
 
 - **FR-001**: System MUST accept financial report uploads in PDF, HTML, TXT, and iXBRL formats up to 50MB per file
 - **FR-002**: System MUST automatically download financial reports from SEC.gov when provided with company ticker symbols
-- **FR-003**: System MUST parse iXBRL (Inline eXtensible Business Reporting Language) format files to extract both structured data and narrative content
+- **FR-003**: System MUST parse iXBRL (Inline eXtensible Business Reporting Language) format files to extract both structured financial data and narrative content for cross-referencing analysis
 - **FR-004**: System MUST extract narrative sections from reports including Management Discussion & Analysis and CEO letters
-- **FR-005**: System MUST classify narrative tone as positive, neutral, negative, or uncertain with confidence scores
+- **FR-005**: System MUST classify narrative tone using multi-dimensional scoring including optimism, risk, and uncertainty as separate metrics with confidence scores for each dimension
 - **FR-006**: System MUST detect and quantify risk language using modal verb analysis ("may," "could," "should")
 - **FR-007**: System MUST generate Narrative Delta Scores when comparing reports from the same company
 - **FR-008**: System MUST identify and highlight new themes, removed themes, and changed emphasis between report periods
@@ -102,19 +102,21 @@ A research firm integrates FNA sentiment data into their existing investment res
 - **FR-011**: System MUST maintain analysis accuracy of at least 85% compared to human expert classification
 - **FR-012**: System MUST support concurrent analysis of multiple reports without performance degradation
 - **FR-013**: Users MUST be able to view timeline visualizations of sentiment trends across reporting periods
-- **FR-014**: System MUST generate alerts when narrative tone changes exceed configurable threshold percentages
-- **FR-015**: System MUST store analysis results and allow retrieval of historical comparisons
+- **FR-014**: System MUST generate alerts when narrative tone changes exceed threshold percentages that are user-configurable per company (5-50% range) with smart industry-based defaults and user override options
+- **FR-015**: System MUST store analysis results indefinitely and allow retrieval of historical comparisons across unlimited time periods
 - **FR-016**: System MUST provide user authentication and maintain user-specific analysis history
-- **FR-017**: System MUST support batch processing for multiple report analysis
-- **FR-018**: System MUST identify and retrieve the most recent filings (10-K, 10-Q) for requested company tickers
+- **FR-017**: System MUST support batch processing for multiple report analysis with a maximum limit of 10 reports per batch request
+- **FR-018**: System MUST download the most recent 10-K filing by default when provided with company ticker symbols, with user option to specify alternative report types (10-Q, 8-K) and periods
+- **FR-019**: System MUST implement tiered user access based on subscription levels (Basic/Pro/Enterprise) with feature restrictions aligned to monetization strategy
+- **FR-020**: System MUST cross-reference narrative tone analysis with structured financial performance metrics extracted from iXBRL data to provide enhanced insights
 
 ### Key Entities
 
 - **Company**: Represents public companies being analyzed, includes ticker symbol, name, sector, and industry classification
 - **Financial Report**: Document entity with file metadata, upload timestamp or download source (SEC.gov), report type (10-K, 10-Q, annual), fiscal period, and format type (PDF, HTML, TXT, iXBRL)
-- **Narrative Analysis**: Analysis results including sentiment scores, confidence levels, key themes, risk indicators, and processing timestamp
-- **Narrative Delta**: Comparison entity linking two reports with calculated change metrics, theme evolution, and shift indicators
-- **User**: System users with authentication credentials, subscription tier, analysis history, and preference settings
+- **Narrative Analysis**: Analysis results including multi-dimensional sentiment scores (optimism, risk, uncertainty), confidence levels for each dimension, key themes, risk indicators, cross-referenced financial metrics, and processing timestamp
+- **Narrative Delta**: Comparison entity linking two reports with calculated change metrics, theme evolution, and shift indicators across multiple sentiment dimensions
+- **User**: System users with authentication credentials, subscription tier (Basic/Pro/Enterprise), analysis history, company-specific alert preferences, and personalized threshold settings
 - **Alert**: Notification entity triggered by significant narrative changes, includes threshold settings and delivery preferences
 
 ## Success Criteria *(mandatory)*
@@ -133,6 +135,10 @@ A research firm integrates FNA sentiment data into their existing investment res
 - **SC-010**: User task completion time for comparative analysis is reduced by 60% compared to manual review processes
 - **SC-011**: Automatic report downloads from SEC.gov complete successfully for 95% of valid ticker symbol requests
 - **SC-012**: iXBRL file parsing extracts both narrative content and structured data with 90% accuracy compared to manual extraction
+- **SC-013**: Multi-dimensional sentiment scoring (optimism, risk, uncertainty) shows consistent correlation patterns with market volatility events with 75% accuracy
+- **SC-014**: Batch processing completes analysis of 10 reports within 10 minutes for 95% of requests
+- **SC-015**: Tiered access control prevents unauthorized feature access with 100% compliance across subscription levels
+- **SC-016**: Cross-referenced analysis combining narrative sentiment and financial metrics provides insights rated as valuable by 80% of users
 
 ## Assumptions and Dependencies
 
@@ -146,6 +152,9 @@ A research firm integrates FNA sentiment data into their existing investment res
 - SEC.gov EDGAR database remains publicly accessible with reasonable rate limits
 - Company ticker symbols provided by users are valid NYSE, NASDAQ, or other major exchange symbols
 - iXBRL files follow standard SEC formatting guidelines for structured data elements
+- Users understand subscription tier limitations and upgrade appropriately for advanced features
+- Industry classification data is available and reliable for setting intelligent alert thresholds
+- Financial performance metrics from iXBRL data correlate meaningfully with narrative sentiment
 
 ### Dependencies
 
@@ -158,3 +167,6 @@ A research firm integrates FNA sentiment data into their existing investment res
 - iXBRL parsing library or capability for processing structured financial data elements
 - Rate limiting and error handling for SEC.gov API interactions
 - Ticker symbol validation service or database for verifying company identifiers
+- Subscription management system for implementing tiered access controls
+- Industry classification database for intelligent alert threshold defaults
+- Financial metrics correlation engine for cross-referencing narrative with performance data

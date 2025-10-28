@@ -1,0 +1,736 @@
+openapi: 3.0.3
+info:
+  title: Financial Narrative Analyzer API
+  version: 1.0.0
+  description: |
+    REST API for analyzing sentiment and narrative changes in corporate financial reports.
+    Supports automated SEC.gov downloads, multi-format parsing, and multi-dimensional sentiment analysis.
+  contact:
+    name: FNA Support
+    email: support@fna-platform.com
+  license:
+    name: Proprietary
+    
+servers:
+  - url: https://api.fna-platform.com/v1
+    description: Production server
+  - url: https://staging-api.fna-platform.com/v1
+    description: Staging server
+    
+security:
+  - bearerAuth: []
+  - apiKey: []
+
+paths:
+  # Authentication Endpoints
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 8
+      responses:
+        200:
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                    example: bearer
+                  expires_in:
+                    type: integer
+                    example: 3600
+        401:
+          $ref: '#/components/responses/Unauthorized'
+          
+  # Company Management
+  /companies:
+    get:
+      tags: [Companies]
+      summary: List companies
+      parameters:
+        - name: ticker
+          in: query
+          schema:
+            type: string
+        - name: sector
+          in: query
+          schema:
+            type: string
+      responses:
+        200:
+          description: List of companies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  companies:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Company'
+                  total:
+                    type: integer
+    
+    post:
+      tags: [Companies]
+      summary: Add company for tracking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticker_symbol]
+              properties:
+                ticker_symbol:
+                  type: string
+                  pattern: '^[A-Z]{1,5}$'
+                company_name:
+                  type: string
+      responses:
+        201:
+          description: Company added successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Company'
+
+  /companies/{company_id}/reports:
+    get:
+      tags: [Reports]
+      summary: Get reports for a company
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: List of company reports
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reports:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FinancialReport'
+
+  # Report Processing
+  /reports/upload:
+    post:
+      tags: [Reports]
+      summary: Upload financial report for analysis
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, company_id]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Financial report file (PDF, HTML, TXT, iXBRL)
+                company_id:
+                  type: string
+                  format: uuid
+                report_type:
+                  type: string
+                  enum: [10-K, 10-Q, 8-K, Annual, Other]
+                fiscal_period:
+                  type: string
+                  example: "Q1 2024"
+      responses:
+        202:
+          description: File uploaded and processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialReport'
+        400:
+          $ref: '#/components/responses/BadRequest'
+
+  /reports/download:
+    post:
+      tags: [Reports]
+      summary: Download and analyze report from SEC.gov
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticker_symbol]
+              properties:
+                ticker_symbol:
+                  type: string
+                  pattern: '^[A-Z]{1,5}$'
+                report_type:
+                  type: string
+                  enum: [10-K, 10-Q, 8-K]
+                  default: 10-K
+                fiscal_year:
+                  type: integer
+                  example: 2024
+      responses:
+        202:
+          description: Download initiated and processing started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FinancialReport'
+        404:
+          description: Report not found on SEC.gov
+
+  /reports/batch:
+    post:
+      tags: [Reports]
+      summary: Batch process multiple reports
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [requests]
+              properties:
+                requests:
+                  type: array
+                  maxItems: 10
+                  items:
+                    oneOf:
+                      - $ref: '#/components/schemas/UploadRequest'
+                      - $ref: '#/components/schemas/DownloadRequest'
+      responses:
+        202:
+          description: Batch processing initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  batch_id:
+                    type: string
+                    format: uuid
+                  requests_count:
+                    type: integer
+
+  # Analysis Results
+  /reports/{report_id}/analysis:
+    get:
+      tags: [Analysis]
+      summary: Get narrative analysis for a report
+      parameters:
+        - name: report_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Narrative analysis results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrativeAnalysis'
+        202:
+          description: Analysis still processing
+        404:
+          $ref: '#/components/responses/NotFound'
+
+  /analysis/compare:
+    post:
+      tags: [Analysis]
+      summary: Compare two reports and generate delta analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [base_analysis_id, comparison_analysis_id]
+              properties:
+                base_analysis_id:
+                  type: string
+                  format: uuid
+                comparison_analysis_id:
+                  type: string
+                  format: uuid
+      responses:
+        200:
+          description: Narrative delta analysis
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NarrativeDelta'
+
+  # Dashboard and Visualization
+  /companies/{company_id}/trends:
+    get:
+      tags: [Dashboard]
+      summary: Get sentiment trends over time for a company
+      parameters:
+        - name: company_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [1Y, 2Y, 5Y, ALL]
+            default: 2Y
+      responses:
+        200:
+          description: Sentiment trend data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  company:
+                    $ref: '#/components/schemas/Company'
+                  trends:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SentimentTrend'
+
+  # Alerts Management
+  /alerts:
+    get:
+      tags: [Alerts]
+      summary: Get user alerts
+      parameters:
+        - name: is_read
+          in: query
+          schema:
+            type: boolean
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        200:
+          description: List of alerts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alerts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Alert'
+
+  /alerts/{alert_id}/read:
+    post:
+      tags: [Alerts]
+      summary: Mark alert as read
+      parameters:
+        - name: alert_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        200:
+          description: Alert marked as read
+
+  # Alert Preferences
+  /alert-preferences:
+    get:
+      tags: [Alerts]
+      summary: Get user alert preferences
+      responses:
+        200:
+          description: Alert preferences
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AlertPreference'
+    
+    post:
+      tags: [Alerts]
+      summary: Set alert preferences for a company
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertPreference'
+      responses:
+        201:
+          description: Alert preference created
+
+  # Search and Discovery
+  /search/similar:
+    post:
+      tags: [Search]
+      summary: Find similar narrative sections using vector search
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query_text]
+              properties:
+                query_text:
+                  type: string
+                  minLength: 10
+                company_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                limit:
+                  type: integer
+                  default: 20
+      responses:
+        200:
+          description: Similar narrative sections
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SimilarityResult'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
+
+  schemas:
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ticker_symbol:
+          type: string
+        company_name:
+          type: string
+        sector:
+          type: string
+        industry:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    FinancialReport:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        report_type:
+          type: string
+          enum: [10-K, 10-Q, 8-K, Annual, Other]
+        fiscal_period:
+          type: string
+        filing_date:
+          type: string
+          format: date
+        file_format:
+          type: string
+          enum: [PDF, HTML, TXT, iXBRL]
+        file_size_bytes:
+          type: integer
+        processing_status:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+        created_at:
+          type: string
+          format: date-time
+
+    NarrativeAnalysis:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        report_id:
+          type: string
+          format: uuid
+        optimism_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        optimism_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        risk_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        risk_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        uncertainty_score:
+          type: number
+          minimum: 0
+          maximum: 1
+        uncertainty_confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        key_themes:
+          type: array
+          items:
+            type: string
+        risk_indicators:
+          type: array
+          items:
+            type: object
+            properties:
+              phrase:
+                type: string
+              category:
+                type: string
+              confidence:
+                type: number
+        financial_metrics:
+          type: object
+          additionalProperties: true
+        processing_time_seconds:
+          type: integer
+        model_version:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    NarrativeDelta:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company_id:
+          type: string
+          format: uuid
+        optimism_delta:
+          type: number
+          minimum: -1
+          maximum: 1
+        risk_delta:
+          type: number
+          minimum: -1
+          maximum: 1
+        uncertainty_delta:
+          type: number
+          minimum: -1
+          maximum: 1
+        overall_sentiment_delta:
+          type: number
+          minimum: -1
+          maximum: 1
+        themes_added:
+          type: array
+          items:
+            type: string
+        themes_removed:
+          type: array
+          items:
+            type: string
+        shift_significance:
+          type: string
+          enum: [MINOR, MODERATE, MAJOR, CRITICAL]
+
+    Alert:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        company:
+          $ref: '#/components/schemas/Company'
+        alert_type:
+          type: string
+          enum: [SENTIMENT_SHIFT, RISK_INCREASE, THEME_CHANGE]
+        threshold_percentage:
+          type: number
+        actual_change_percentage:
+          type: number
+        alert_message:
+          type: string
+        is_read:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    AlertPreference:
+      type: object
+      properties:
+        company_id:
+          type: string
+          format: uuid
+        alert_type:
+          type: string
+          enum: [SENTIMENT_SHIFT, RISK_INCREASE, THEME_CHANGE]
+        threshold_percentage:
+          type: number
+          minimum: 5
+          maximum: 50
+        delivery_method:
+          type: string
+          enum: [IN_APP, EMAIL, WEBHOOK]
+
+    SentimentTrend:
+      type: object
+      properties:
+        filing_date:
+          type: string
+          format: date
+        report_type:
+          type: string
+        optimism_score:
+          type: number
+        risk_score:
+          type: number
+        uncertainty_score:
+          type: number
+
+    SimilarityResult:
+      type: object
+      properties:
+        analysis_id:
+          type: string
+          format: uuid
+        company:
+          $ref: '#/components/schemas/Company'
+        report:
+          $ref: '#/components/schemas/FinancialReport'
+        section_type:
+          type: string
+        text_excerpt:
+          type: string
+        similarity_score:
+          type: number
+          minimum: 0
+          maximum: 1
+
+    UploadRequest:
+      type: object
+      required: [type, company_id, file]
+      properties:
+        type:
+          type: string
+          enum: [upload]
+        company_id:
+          type: string
+          format: uuid
+        file:
+          type: string
+          format: binary
+
+    DownloadRequest:
+      type: object
+      required: [type, ticker_symbol]
+      properties:
+        type:
+          type: string
+          enum: [download]
+        ticker_symbol:
+          type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request format or parameters
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+              details:
+                type: object
+
+    Unauthorized:
+      description: Authentication required or invalid credentials
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "unauthorized"
+              message:
+                type: string
+                example: "Invalid or expired authentication token"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: "not_found"
+              message:
+                type: string
+
+  examples:
+    CompanyAnalysisExample:
+      summary: NVIDIA Q3 2024 Analysis
+      value:
+        optimism_score: 0.78
+        risk_score: 0.23
+        uncertainty_score: 0.15
+        key_themes: ["AI growth", "data center expansion", "market leadership"]
+        processing_time_seconds: 43

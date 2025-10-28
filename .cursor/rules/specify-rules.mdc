@@ -1,0 +1,30 @@
+﻿# FNA Development Guidelines
+
+Auto-generated from all feature plans. Last updated: 2025-10-29
+
+## Active Technologies
+
+- Python 3.11+ (backend), React 18+ with TypeScript (frontend) + FastAPI, Transformers library, Qwen3-4B LLM, PostgreSQL, pgvector, SQLAlchemy, React, Tailwind CSS (001-fna-platform)
+
+## Project Structure
+
+```text
+backend/
+frontend/
+tests/
+```
+
+## Commands
+
+cd src; pytest; ruff check .
+
+## Code Style
+
+Python 3.11+ (backend), React 18+ with TypeScript (frontend): Follow standard conventions
+
+## Recent Changes
+
+- 001-fna-platform: Added Python 3.11+ (backend), React 18+ with TypeScript (frontend) + FastAPI, Transformers library, Qwen3-4B LLM, PostgreSQL, pgvector, SQLAlchemy, React, Tailwind CSS
+
+<!-- MANUAL ADDITIONS START -->
+<!-- MANUAL ADDITIONS END -->

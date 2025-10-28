@@ -36,13 +36,14 @@ npm install
 ### 2. Database Setup
 
 ```bash
-# Create PostgreSQL database
-createdb fna_development
+# Create PostgreSQL database (using localhost with postgres user)
+createdb -h localhost -U postgres fna_development
+# Password: qwerty123
 
 # Enable pgvector extension
-psql fna_development -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql -h localhost -U postgres fna_development -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
-# Run database migrations
+# Run database migrations (after environment setup below)
 cd ../backend
 alembic upgrade head
 ```
@@ -52,8 +53,8 @@ alembic upgrade head
 Create `backend/.env` file:
 
 ```bash
-# Database
-DATABASE_URL=postgresql://localhost:5432/fna_development
+# Database (localhost PostgreSQL with credentials)
+DATABASE_URL=postgresql://postgres:qwerty123@localhost:5432/fna_development
 
 # LLM Configuration
 MODEL_NAME=Qwen/Qwen2.5-4B-Instruct

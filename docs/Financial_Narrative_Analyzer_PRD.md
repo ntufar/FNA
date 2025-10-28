@@ -130,39 +130,39 @@ is limited.
                       IBM Granite 4.0 H Tiny     comprehension and reasoning
                                                   (4B parameters recommended)
 
-  **Data Storage**    SQLite + Local Filesystem   All structured data, metadata,
-                                                  analytics results, and file
-                                                  storage in single database
+  **Data Storage**    PostgreSQL + Local          Structured data, metadata,
+                      Filesystem                  analytics results, with native
+                                                  vector search via pgvector
 
-  **Vector Search**   SQLite-VSS or FAISS         Embeddings and similarity
-                      (local files)              search (lightweight options)
+  **Vector Search**   PostgreSQL pgvector         Embeddings and similarity
+                      extension                   search integrated in main DB
 
   **Visualization**   Plotly or Recharts          Sentiment trends and
                                                   comparisons
   ---------------------------------------------------------------------------
 
-### **6.1 Simplified Storage Architecture Benefits**
+### **6.1 Optimized PostgreSQL Architecture Benefits**
 
   ---------------------------------------------------------------------------
-  Component           Traditional Setup       Simplified SQLite Setup
+  Component           Traditional Setup       Optimized PostgreSQL Setup
   ------------------- ----------------------- ---------------------------
-  **Database**        PostgreSQL server       Single SQLite file
-                      (installation,          (zero-config, embedded)
-                      configuration, 
-                      maintenance)
+  **Database**        PostgreSQL + separate   PostgreSQL with pgvector
+                      vector database         (single database for all data)
+                      (e.g., ChromaDB, Pinecone)
 
   **File Storage**    MinIO object storage    Local filesystem
-                      (S3-compatible API,     (simple file operations)
-                      separate service)
+                      (S3-compatible API,     (simple file operations,
+                      separate service)       PostgreSQL file references)
 
-  **Vector Search**   ChromaDB server         SQLite-VSS extension or
-                      (additional service)    FAISS local files
+  **Vector Search**   ChromaDB/Pinecone       Native pgvector extension
+                      (additional API calls,  (SQL queries, ACID compliance,
+                      separate infrastructure) integrated transactions)
 
-  **Deployment**      3+ separate services    Single Python application
-                      (complex orchestration) (simple deployment)
+  **Deployment**      2+ separate services    PostgreSQL + Python app
+                      (DB + Vector DB + App)  (already installed locally)
 
-  **Development**     Multiple containers     `python main.py` and done
-                      or services to manage   (instant local development)
+  **Query Complexity** JOIN across systems    Single SQL with vector ops
+                      (complex data federation) (native performance)
   ---------------------------------------------------------------------------
 
 ### **6.2 Model Comparison & Selection**
@@ -240,9 +240,9 @@ is limited.
                          GGUF 4-bit quantization, cache embeddings,
                          async processing for efficiency
 
-  Infrastructure        Single SQLite database eliminates multiple
-  complexity             service dependencies, reduces deployment
-                         complexity and operational overhead
+  Infrastructure        PostgreSQL + pgvector eliminates separate
+  complexity             vector database, leverages existing local
+                         PostgreSQL installation
   -----------------------------------------------------------------------
 
 ## **12. Timeline**

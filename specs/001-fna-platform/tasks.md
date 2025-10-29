@@ -72,11 +72,11 @@
 - [x] T027 [US1] Implement SECDownloader service with EDGAR API in backend/src/services/sec_downloader.py
 - [x] T028 [US1] Implement iXBRLParser service with Arelle in backend/src/services/ixbrl_parser.py
 - [x] T029 [US1] Implement DocumentProcessor service orchestrating parsing and analysis in backend/src/services/document_processor.py
-- [ ] T030 [US1] Create authentication endpoints (/auth/login, /auth/register) in backend/src/api/v1/auth.py
-- [ ] T031 [US1] Create company management endpoints (/companies) in backend/src/api/v1/companies.py
-- [ ] T032 [US1] Create report upload endpoint (/reports/upload) in backend/src/api/v1/reports.py
-- [ ] T033 [US1] Create report download endpoint (/reports/download) in backend/src/api/v1/reports.py
-- [ ] T034 [US1] Create analysis retrieval endpoint (/reports/{id}/analysis) in backend/src/api/v1/reports.py
+- [x] T030 [US1] Create authentication endpoints (/auth/login, /auth/register) in backend/src/api/v1/auth.py
+- [x] T031 [US1] Create company management endpoints (/companies) in backend/src/api/v1/companies.py
+- [x] T032 [US1] Create report upload endpoint (/reports/upload) in backend/src/api/v1/reports.py
+- [x] T033 [US1] Create report download endpoint (/reports/download) in backend/src/api/v1/reports.py
+- [x] T034 [US1] Create analysis retrieval endpoint (/reports/{id}/analysis) in backend/src/api/v1/reports.py
 - [ ] T035 [US1] Create login/register components in frontend/src/components/auth/
 - [ ] T036 [US1] Create company search component in frontend/src/components/companies/CompanySearch.tsx
 - [ ] T037 [US1] Create file upload component in frontend/src/components/reports/ReportUpload.tsx

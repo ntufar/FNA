@@ -41,10 +41,10 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T012 Setup database schema and create all entity tables in backend/alembic/versions/
-- [ ] T013 [P] Create base SQLAlchemy models (User, Company) in backend/src/models/base.py
-- [ ] T014 [P] Implement JWT authentication middleware in backend/src/core/security.py
-- [ ] T015 [P] Setup FastAPI routing structure in backend/src/api/v1/
+- [x] T012 Setup database schema and create all entity tables in backend/alembic/versions/
+- [x] T013 [P] Create base SQLAlchemy models (User, Company) in backend/src/models/base.py
+- [x] T014 [P] Implement JWT authentication middleware in backend/src/core/security.py
+- [x] T015 [P] Setup FastAPI routing structure in backend/src/api/v1/
 - [ ] T016 [P] Create database connection and session management in backend/src/database/connection.py
 - [ ] T017 [P] Implement error handling and logging infrastructure in backend/src/core/exceptions.py
 - [ ] T018 [P] Configure CORS and security middleware in backend/src/main.py

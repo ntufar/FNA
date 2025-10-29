@@ -21,17 +21,17 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create project directory structure per plan.md (backend/, frontend/, docs/)
-- [ ] T002 Initialize Python 3.11+ backend project with FastAPI dependencies in backend/requirements.txt
-- [ ] T003 [P] Initialize React 18+ TypeScript frontend project with Vite in frontend/package.json
-- [ ] T004 [P] Configure PostgreSQL database with pgvector extension
-- [ ] T005 [P] Configure backend linting and formatting (black, isort, mypy)
-- [ ] T006 [P] Configure frontend linting and formatting (ESLint, Prettier, TypeScript)
-- [ ] T007 Setup Alembic database migrations framework in backend/alembic/
-- [ ] T008 Create environment configuration files (.env templates for backend and frontend)
-- [ ] T009 [P] Install and configure Qwen3-4B model with 4-bit quantization per research.md
-- [ ] T010 [P] Install Arelle library for iXBRL parsing per research.md
-- [ ] T011 [P] Configure sentence-transformers MiniLM-L6-v2 for embeddings per research.md
+- [x] T001 Create project directory structure per plan.md (backend/, frontend/, docs/)
+- [x] T002 Initialize Python 3.11+ backend project with FastAPI dependencies in backend/requirements.txt
+- [x] T003 [P] Initialize React 18+ TypeScript frontend project with Vite in frontend/package.json
+- [x] T004 [P] Configure PostgreSQL database with pgvector extension
+- [x] T005 [P] Configure backend linting and formatting (black, isort, mypy)
+- [x] T006 [P] Configure frontend linting and formatting (ESLint, Prettier, TypeScript)
+- [x] T007 Setup Alembic database migrations framework in backend/alembic/
+- [x] T008 Create environment configuration files (.env templates for backend and frontend)
+- [x] T009 [P] Install and configure Qwen3-4B model with 4-bit quantization per research.md
+- [x] T010 [P] Install Arelle library for iXBRL parsing per research.md
+- [x] T011 [P] Configure sentence-transformers MiniLM-L6-v2 for embeddings per research.md
 
 ---
 

@@ -33,7 +33,23 @@ cd ../frontend
 npm install
 ```
 
-### 2. Database Setup
+### 2. LM Studio Setup
+
+```bash
+# Download and install LM Studio from https://lmstudio.ai/
+# 1. Open LM Studio
+# 2. Go to "Discover" tab and search for "qwen/qwen3-4b-2507"  
+# 3. Download the model (recommend Q4_K_M quantization)
+# 4. Go to "Chat" tab and load the qwen/qwen3-4b-2507 model
+# 5. Go to "Local Server" tab and start server on http://127.0.0.1:1234
+# 6. Keep LM Studio running during FNA development/usage
+
+# Test LM Studio connection
+cd backend
+python scripts/test_lm_studio.py
+```
+
+### 3. Database Setup
 
 ```bash
 # Create PostgreSQL database (using localhost with postgres user)
@@ -48,7 +64,7 @@ cd ../backend
 alembic upgrade head
 ```
 
-### 3. Environment Configuration
+### 4. Environment Configuration
 
 Create `backend/.env` file:
 
@@ -56,10 +72,13 @@ Create `backend/.env` file:
 # Database (localhost PostgreSQL with credentials)
 DATABASE_URL=postgresql://postgres:qwerty123@localhost:5432/fna_development
 
-# LLM Configuration
-MODEL_NAME=Qwen/Qwen2.5-4B-Instruct
-MODEL_QUANTIZATION=4bit
-MODEL_CACHE_DIR=./model_cache
+# LLM Configuration (qwen/qwen3-4b-2507 via LM Studio)
+MODEL_NAME=qwen/qwen3-4b-2507
+MODEL_API_URL=http://127.0.0.1:1234
+MODEL_API_TIMEOUT=30
+MODEL_MAX_TOKENS=512
+MODEL_TEMPERATURE=0.1
+MODEL_TOP_P=0.9
 
 # SEC.gov API
 SEC_USER_AGENT="YourCompany contact@yourcompany.com"
@@ -83,17 +102,13 @@ VITE_APP_TITLE="FNA Platform - Development"
 
 ## Quick Start
 
-### 1. Start Backend Services
+### 5. Start Backend Services
 
 ```bash
 cd backend
 
-# Download and cache LLM model (one-time setup)
-python -c "
-from src.services.sentiment_analyzer import SentimentAnalyzer
-analyzer = SentimentAnalyzer()
-print('Model downloaded and ready')
-"
+# Test LM Studio connection (ensure LM Studio is running with qwen/qwen3-4b-2507 loaded)
+python scripts/test_lm_studio.py
 
 # Start FastAPI development server
 uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
@@ -101,7 +116,7 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 Backend will be available at: http://localhost:8000
 
-### 2. Start Frontend Development Server
+### 6. Start Frontend Development Server
 
 ```bash
 cd frontend
@@ -110,7 +125,7 @@ npm run dev
 
 Frontend will be available at: http://localhost:5173
 
-### 3. Verify Installation
+### 7. Verify Installation
 
 Open http://localhost:5173 and you should see the FNA platform login page.
 

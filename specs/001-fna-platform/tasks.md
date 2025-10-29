@@ -45,12 +45,12 @@
 - [x] T013 [P] Create base SQLAlchemy models (User, Company) in backend/src/models/base.py
 - [x] T014 [P] Implement JWT authentication middleware in backend/src/core/security.py
 - [x] T015 [P] Setup FastAPI routing structure in backend/src/api/v1/
-- [ ] T016 [P] Create database connection and session management in backend/src/database/connection.py
-- [ ] T017 [P] Implement error handling and logging infrastructure in backend/src/core/exceptions.py
-- [ ] T018 [P] Configure CORS and security middleware in backend/src/main.py
-- [ ] T019 [P] Create API client service in frontend/src/services/api.ts
-- [ ] T020 [P] Setup React routing and authentication context in frontend/src/
-- [ ] T021 [P] Configure pgvector extension and create vector indexes per data-model.md
+- [x] T016 [P] Create database connection and session management in backend/src/database/connection.py
+- [x] T017 [P] Implement error handling and logging infrastructure in backend/src/core/exceptions.py
+- [x] T018 [P] Configure CORS and security middleware in backend/src/main.py
+- [x] T019 [P] Create API client service in frontend/src/services/api.ts
+- [x] T020 [P] Setup React routing and authentication context in frontend/src/
+- [x] T021 [P] Configure pgvector extension and create vector indexes per data-model.md
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 

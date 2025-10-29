@@ -1,0 +1,1188 @@
+{
+  "info": {
+    "name": "Financial Narrative Analyzer API",
+    "description": "Complete API collection for the Financial Narrative Analyzer platform with authentication, report processing, and sentiment analysis endpoints.",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{host}}/v1",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "company_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "report_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "analysis_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global pre-request script for JWT token handling",
+          "const tokenExpiry = pm.globals.get('token_expiry');",
+          "const currentTime = new Date().getTime();",
+          "",
+          "if (!tokenExpiry || currentTime > tokenExpiry) {",
+          "    console.log('Token expired or missing, will need to re-authenticate');",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "User Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains access token', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('access_token');",
+                  "    pm.expect(jsonData).to.have.property('token_type');",
+                  "    pm.expect(jsonData).to.have.property('expires_in');",
+                  "});",
+                  "",
+                  "// Store token for subsequent requests",
+                  "if (pm.response.code === 200) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('access_token', responseJson.access_token);",
+                  "    ",
+                  "    // Calculate token expiry time",
+                  "    const expiryTime = new Date().getTime() + (responseJson.expires_in * 1000);",
+                  "    pm.globals.set('token_expiry', expiryTime);",
+                  "    ",
+                  "    console.log('Access token stored successfully');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@fna-platform.com\",\n  \"password\": \"SecurePass123!\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Authenticate user and receive JWT access token"
+          }
+        },
+        {
+          "name": "User Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Registration successful', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains user info', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('subscription_tier');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"newuser@fna-platform.com\",\n  \"password\": \"SecurePass123!\",\n  \"full_name\": \"New User\",\n  \"subscription_tier\": \"BASIC\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "register"
+              ]
+            },
+            "description": "Register new user account"
+          }
+        },
+        {
+          "name": "Get User Profile",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Profile retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains user profile', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('email');",
+                  "    pm.expect(jsonData).to.have.property('subscription_tier');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "profile"
+              ]
+            },
+            "description": "Get authenticated user profile information"
+          }
+        }
+      ],
+      "description": "User authentication and account management endpoints"
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "List Companies",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Companies listed successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains companies array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('companies');",
+                  "    pm.expect(jsonData).to.have.property('total');",
+                  "    pm.expect(jsonData.companies).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Store first company ID for subsequent tests",
+                  "if (pm.response.code === 200) {",
+                  "    const responseJson = pm.response.json();",
+                  "    if (responseJson.companies && responseJson.companies.length > 0) {",
+                  "        pm.collectionVariables.set('company_id', responseJson.companies[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies?ticker=NVDA&sector=Technology",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies"
+              ],
+              "query": [
+                {
+                  "key": "ticker",
+                  "value": "NVDA",
+                  "description": "Filter by ticker symbol"
+                },
+                {
+                  "key": "sector",
+                  "value": "Technology",
+                  "description": "Filter by sector"
+                }
+              ]
+            },
+            "description": "Get list of companies with optional filtering"
+          }
+        },
+        {
+          "name": "Add Company",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company added successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains company data', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('ticker_symbol');",
+                  "    pm.expect(jsonData).to.have.property('company_name');",
+                  "});",
+                  "",
+                  "// Store company ID for subsequent tests",
+                  "if (pm.response.code === 201) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('company_id', responseJson.id);",
+                  "    console.log('Company ID stored: ' + responseJson.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker_symbol\": \"NVDA\",\n  \"company_name\": \"NVIDIA Corporation\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/companies",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies"
+              ]
+            },
+            "description": "Add a new company for tracking and analysis"
+          }
+        },
+        {
+          "name": "Get Company Reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Company reports retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains reports array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('reports');",
+                  "    pm.expect(jsonData.reports).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Store first report ID for subsequent tests",
+                  "if (pm.response.code === 200) {",
+                  "    const responseJson = pm.response.json();",
+                  "    if (responseJson.reports && responseJson.reports.length > 0) {",
+                  "        pm.collectionVariables.set('report_id', responseJson.reports[0].id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{company_id}}/reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "reports"
+              ]
+            },
+            "description": "Get all financial reports for a specific company"
+          }
+        }
+      ],
+      "description": "Company management and tracking endpoints"
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Upload Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Report upload accepted', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Response contains report data', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('processing_status');",
+                  "    pm.expect(jsonData).to.have.property('company_id');",
+                  "});",
+                  "",
+                  "// Store report ID for subsequent tests",
+                  "if (pm.response.code === 202) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('report_id', responseJson.id);",
+                  "    console.log('Report ID stored: ' + responseJson.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "/path/to/sample-10k.pdf",
+                  "description": "Financial report file (PDF, HTML, TXT, iXBRL)"
+                },
+                {
+                  "key": "company_id",
+                  "value": "{{company_id}}",
+                  "type": "text"
+                },
+                {
+                  "key": "report_type",
+                  "value": "10-K",
+                  "type": "text"
+                },
+                {
+                  "key": "fiscal_period",
+                  "value": "Q4 2024",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/upload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "upload"
+              ]
+            },
+            "description": "Upload a financial report file for processing and analysis"
+          }
+        },
+        {
+          "name": "Download from SEC.gov",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('SEC download initiated', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Response contains report data', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('id');",
+                  "    pm.expect(jsonData).to.have.property('processing_status');",
+                  "    pm.expect(jsonData).to.have.property('download_source');",
+                  "});",
+                  "",
+                  "// Store report ID for subsequent tests",
+                  "if (pm.response.code === 202) {",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('report_id', responseJson.id);",
+                  "    console.log('SEC download Report ID stored: ' + responseJson.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"ticker_symbol\": \"NVDA\",\n  \"report_type\": \"10-K\",\n  \"fiscal_year\": 2024\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/download",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "download"
+              ]
+            },
+            "description": "Download and process latest financial report from SEC.gov"
+          }
+        },
+        {
+          "name": "Batch Process Reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Batch processing initiated', function () {",
+                  "    pm.response.to.have.status(202);",
+                  "});",
+                  "",
+                  "pm.test('Response contains batch info', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('batch_id');",
+                  "    pm.expect(jsonData).to.have.property('requests_count');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"requests\": [\n    {\n      \"type\": \"download\",\n      \"ticker_symbol\": \"NVDA\"\n    },\n    {\n      \"type\": \"download\",\n      \"ticker_symbol\": \"AAPL\"\n    },\n    {\n      \"type\": \"download\",\n      \"ticker_symbol\": \"MSFT\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/reports/batch",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "batch"
+              ]
+            },
+            "description": "Process multiple reports in a single batch request"
+          }
+        }
+      ],
+      "description": "Financial report upload, download, and processing endpoints"
+    },
+    {
+      "name": "Analysis",
+      "item": [
+        {
+          "name": "Get Report Analysis",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Analysis retrieved or processing status returned', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 202]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Analysis response contains sentiment scores', function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        pm.expect(jsonData).to.have.property('optimism_score');",
+                  "        pm.expect(jsonData).to.have.property('risk_score');",
+                  "        pm.expect(jsonData).to.have.property('uncertainty_score');",
+                  "        pm.expect(jsonData).to.have.property('key_themes');",
+                  "    });",
+                  "    ",
+                  "    // Store analysis ID for comparison tests",
+                  "    const responseJson = pm.response.json();",
+                  "    pm.collectionVariables.set('analysis_id', responseJson.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/{{report_id}}/analysis",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "{{report_id}}",
+                "analysis"
+              ]
+            },
+            "description": "Get narrative analysis results for a processed report"
+          }
+        },
+        {
+          "name": "Compare Reports",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Comparison analysis successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains delta analysis', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('optimism_delta');",
+                  "    pm.expect(jsonData).to.have.property('risk_delta');",
+                  "    pm.expect(jsonData).to.have.property('uncertainty_delta');",
+                  "    pm.expect(jsonData).to.have.property('shift_significance');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"base_analysis_id\": \"{{analysis_id}}\",\n  \"comparison_analysis_id\": \"00000000-0000-0000-0000-000000000002\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/analysis/compare",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "analysis",
+                "compare"
+              ]
+            },
+            "description": "Compare two report analyses and generate delta analysis"
+          }
+        }
+      ],
+      "description": "Narrative analysis and comparison endpoints"
+    },
+    {
+      "name": "Dashboard",
+      "item": [
+        {
+          "name": "Get Company Trends",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Trends retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains trend data', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('company');",
+                  "    pm.expect(jsonData).to.have.property('trends');",
+                  "    pm.expect(jsonData.trends).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/companies/{{company_id}}/trends?period=2Y",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "companies",
+                "{{company_id}}",
+                "trends"
+              ],
+              "query": [
+                {
+                  "key": "period",
+                  "value": "2Y",
+                  "description": "Time period: 1Y, 2Y, 5Y, ALL"
+                }
+              ]
+            },
+            "description": "Get sentiment trends over time for a specific company"
+          }
+        }
+      ],
+      "description": "Dashboard and visualization endpoints"
+    },
+    {
+      "name": "Alerts",
+      "item": [
+        {
+          "name": "Get Alerts",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Alerts retrieved successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains alerts array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('alerts');",
+                  "    pm.expect(jsonData.alerts).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts?is_read=false&limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "is_read",
+                  "value": "false",
+                  "description": "Filter by read status"
+                },
+                {
+                  "key": "limit",
+                  "value": "50",
+                  "description": "Maximum number of alerts to return"
+                }
+              ]
+            },
+            "description": "Get user alerts with optional filtering"
+          }
+        },
+        {
+          "name": "Mark Alert as Read",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Alert marked as read', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alerts/00000000-0000-0000-0000-000000000001/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "00000000-0000-0000-0000-000000000001",
+                "read"
+              ]
+            },
+            "description": "Mark a specific alert as read"
+          }
+        },
+        {
+          "name": "Get Alert Preferences",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Alert preferences retrieved', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is array of preferences', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/alert-preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alert-preferences"
+              ]
+            },
+            "description": "Get user's alert preferences"
+          }
+        },
+        {
+          "name": "Set Alert Preference",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Alert preference set successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"company_id\": \"{{company_id}}\",\n  \"alert_type\": \"SENTIMENT_SHIFT\",\n  \"threshold_percentage\": 15,\n  \"delivery_method\": \"EMAIL\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/alert-preferences",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alert-preferences"
+              ]
+            },
+            "description": "Set alert preferences for a company"
+          }
+        }
+      ],
+      "description": "Alert management and preferences endpoints"
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "Find Similar Narratives",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Similar narratives found', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains similarity results', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('results');",
+                  "    pm.expect(jsonData.results).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Results have similarity scores', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    if (jsonData.results.length > 0) {",
+                  "        const firstResult = jsonData.results[0];",
+                  "        pm.expect(firstResult).to.have.property('similarity_score');",
+                  "        pm.expect(firstResult).to.have.property('text_excerpt');",
+                  "        pm.expect(firstResult).to.have.property('company');",
+                  "    }",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query_text\": \"artificial intelligence growth opportunities and market expansion\",\n  \"company_ids\": [\"{{company_id}}\"],\n  \"limit\": 20\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/search/similar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "search",
+                "similar"
+              ]
+            },
+            "description": "Find similar narrative sections using vector search"
+          }
+        }
+      ],
+      "description": "Semantic search and discovery endpoints"
+    },
+    {
+      "name": "Health Checks",
+      "item": [
+        {
+          "name": "General Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Health check returns status', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains health status', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.have.property('status');",
+                  "    pm.expect(jsonData).to.have.property('version');",
+                  "    pm.expect(jsonData).to.have.property('database');",
+                  "    pm.expect(jsonData).to.have.property('timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/../health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "..",
+                "health"
+              ]
+            },
+            "description": "Check overall application health and service status"
+          }
+        },
+        {
+          "name": "Liveness Probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Liveness probe successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response indicates app is live', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData.status).to.equal('live');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/../health/live",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "..",
+                "health",
+                "live"
+              ]
+            },
+            "description": "Kubernetes liveness probe endpoint"
+          }
+        },
+        {
+          "name": "Readiness Probe",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Readiness probe indicates ready or not ready', function () {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([200, 503]);",
+                  "});",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('App is ready to serve requests', function () {",
+                  "        const jsonData = pm.response.json();",
+                  "        pm.expect(jsonData.status).to.equal('ready');",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/../health/ready",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "..",
+                "health",
+                "ready"
+              ]
+            },
+            "description": "Kubernetes readiness probe endpoint"
+          }
+        }
+      ],
+      "description": "Health check and monitoring endpoints"
+    }
+  ]
+}

@@ -64,14 +64,14 @@
 
 ### Implementation for User Story 1
 
-- [ ] T022 [P] [US1] Create User model with authentication in backend/src/models/user.py
-- [ ] T023 [P] [US1] Create Company model with ticker validation in backend/src/models/company.py
-- [ ] T024 [P] [US1] Create FinancialReport model with processing status in backend/src/models/financial_report.py
-- [ ] T025 [P] [US1] Create NarrativeAnalysis model with multi-dimensional scores in backend/src/models/narrative_analysis.py
-- [ ] T026 [US1] Implement SentimentAnalyzer service with Qwen3-4B in backend/src/services/sentiment_analyzer.py
-- [ ] T027 [US1] Implement SECDownloader service with EDGAR API in backend/src/services/sec_downloader.py
-- [ ] T028 [US1] Implement iXBRLParser service with Arelle in backend/src/services/ixbrl_parser.py
-- [ ] T029 [US1] Implement DocumentProcessor service orchestrating parsing and analysis in backend/src/services/document_processor.py
+- [x] T022 [P] [US1] Create User model with authentication in backend/src/models/user.py
+- [x] T023 [P] [US1] Create Company model with ticker validation in backend/src/models/company.py
+- [x] T024 [P] [US1] Create FinancialReport model with processing status in backend/src/models/financial_report.py
+- [x] T025 [P] [US1] Create NarrativeAnalysis model with multi-dimensional scores in backend/src/models/narrative_analysis.py
+- [x] T026 [US1] Implement SentimentAnalyzer service with Qwen3-4B in backend/src/services/sentiment_analyzer.py
+- [x] T027 [US1] Implement SECDownloader service with EDGAR API in backend/src/services/sec_downloader.py
+- [x] T028 [US1] Implement iXBRLParser service with Arelle in backend/src/services/ixbrl_parser.py
+- [x] T029 [US1] Implement DocumentProcessor service orchestrating parsing and analysis in backend/src/services/document_processor.py
 - [ ] T030 [US1] Create authentication endpoints (/auth/login, /auth/register) in backend/src/api/v1/auth.py
 - [ ] T031 [US1] Create company management endpoints (/companies) in backend/src/api/v1/companies.py
 - [ ] T032 [US1] Create report upload endpoint (/reports/upload) in backend/src/api/v1/reports.py

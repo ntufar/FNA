@@ -219,7 +219,7 @@ class ArelleParser:
                     logger.warning(f"Error closing iXBRL model: {e}")
             logger.debug(f"Completed iXBRL parsing for {file_path}")
     
-    def _extract_facts(self, model_xbrl: ModelXbrl) -> Dict[str, Any]:
+    def _extract_facts(self, model_xbrl: "ModelXbrl") -> Dict[str, Any]:
         """Extract XBRL facts from the model."""
         facts = {}
         
@@ -235,7 +235,7 @@ class ArelleParser:
         
         return facts
     
-    def _extract_concepts(self, model_xbrl: ModelXbrl) -> List[str]:
+    def _extract_concepts(self, model_xbrl: "ModelXbrl") -> List[str]:
         """Extract concept names from the model."""
         concepts = []
         
@@ -245,7 +245,7 @@ class ArelleParser:
         
         return list(set(concepts))  # Remove duplicates
     
-    def _extract_contexts(self, model_xbrl: ModelXbrl) -> Dict[str, Any]:
+    def _extract_contexts(self, model_xbrl: "ModelXbrl") -> Dict[str, Any]:
         """Extract context information from the model."""
         contexts = {}
         
@@ -261,7 +261,7 @@ class ArelleParser:
         
         return contexts
     
-    def _extract_units(self, model_xbrl: ModelXbrl) -> Dict[str, Any]:
+    def _extract_units(self, model_xbrl: "ModelXbrl") -> Dict[str, Any]:
         """Extract unit definitions from the model."""
         units = {}
         
@@ -272,7 +272,7 @@ class ArelleParser:
         
         return units
     
-    def _extract_metadata(self, model_xbrl: ModelXbrl) -> Dict[str, Any]:
+    def _extract_metadata(self, model_xbrl: "ModelXbrl") -> Dict[str, Any]:
         """Extract filing metadata from the model."""
         metadata = {}
         
@@ -292,7 +292,7 @@ class ArelleParser:
         
         return metadata
     
-    def _extract_narrative_content(self, model_xbrl: ModelXbrl) -> List[str]:
+    def _extract_narrative_content(self, model_xbrl: "ModelXbrl") -> List[str]:
         """Extract narrative text content from iXBRL document.
         
         This extracts human-readable text that appears in the iXBRL document,

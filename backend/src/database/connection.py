@@ -82,6 +82,22 @@ def init_database():
         logger.info("Database initialization completed")
 
 
+def get_engine() -> Engine:
+    """
+    Get the database engine instance.
+    
+    Returns:
+        Engine: SQLAlchemy engine instance
+        
+    Raises:
+        RuntimeError: If database hasn't been initialized
+    """
+    global engine
+    if engine is None:
+        raise RuntimeError("Database not initialized. Call init_database() first.")
+    return engine
+
+
 def _setup_connection_events(db_engine: Engine):
     """Setup database connection event listeners for monitoring and optimization."""
     

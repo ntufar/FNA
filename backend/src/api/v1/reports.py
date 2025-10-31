@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends, UploadFile, File, Form, BackgroundTasks
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, validator, ConfigDict
 from sqlalchemy.orm import Session
 
 from ...core.security import get_current_user, require_pro_tier
@@ -25,8 +25,8 @@ ALLOWED_MIME_TYPES = {
     "text/html": FileFormat.HTML,
     "application/xhtml+xml": FileFormat.HTML,
     "text/plain": FileFormat.TXT,
-    "application/xml": FileFormat.iXBRL,
-    "text/xml": FileFormat.iXBRL
+    "application/xml": FileFormat.IXBRL,
+    "text/xml": FileFormat.IXBRL
 }
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
 
@@ -420,6 +420,8 @@ async def get_report(
 
 class AnalysisResponse(BaseModel):
     """Narrative analysis response model."""
+    model_config = ConfigDict(protected_namespaces=('settings_',))
+    
     id: str
     report_id: str
     optimism_score: float

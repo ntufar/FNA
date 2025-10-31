@@ -9,7 +9,7 @@ import os
 from functools import lru_cache
 from typing import Optional, List
 
-from pydantic import Field, validator
+from pydantic import Field, validator, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -186,12 +186,13 @@ class Settings(BaseSettings):
             return [ext.strip() for ext in v.split(',')]
         return v
     
-    class Config:
-        """Pydantic configuration."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        env_prefix = ""  # Can be set to "FNA_" for namespacing
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        env_prefix="",  # Can be set to "FNA_" for namespacing
+        protected_namespaces=('settings_',)  # Allow model_ fields by changing protected namespace
+    )
 
 
 class DevelopmentSettings(Settings):

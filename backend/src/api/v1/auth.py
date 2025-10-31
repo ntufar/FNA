@@ -30,13 +30,25 @@ class RegisterRequest(BaseModel):
     """User registration request model."""
     email: EmailStr
     password: str
+    full_name: str
     subscription_tier: str = "Basic"
     
     @validator('password')
     def validate_password(cls, v):
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters long')
+        
+        # Check bcrypt 72-byte limit (important for Unicode characters)
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('Password too long (maximum 72 bytes when encoded)')
+        
         return v
+    
+    @validator('full_name')
+    def validate_full_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Full name must be at least 2 characters long')
+        return v.strip()
     
     @validator('subscription_tier')
     def validate_subscription_tier(cls, v):
@@ -121,11 +133,21 @@ async def register(register_data: RegisterRequest, db: Session = Depends(get_db)
             detail="Email already registered"
         )
     
+    # Create password hash with error handling
+    try:
+        password_hash = hash_password(register_data.password)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    
     # Create new user
     new_user = User(
         id=uuid.uuid4(),
         email=register_data.email,
-        password_hash=hash_password(register_data.password),
+        full_name=register_data.full_name,
+        password_hash=password_hash,
         subscription_tier=register_data.subscription_tier,
         is_active=True,
         created_at=datetime.now(timezone.utc),

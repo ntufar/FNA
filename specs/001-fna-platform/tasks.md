@@ -77,14 +77,14 @@
 - [x] T032 [US1] Create report upload endpoint (/reports/upload) in backend/src/api/v1/reports.py
 - [x] T033 [US1] Create report download endpoint (/reports/download) in backend/src/api/v1/reports.py
 - [x] T034 [US1] Create analysis retrieval endpoint (/reports/{id}/analysis) in backend/src/api/v1/reports.py
-- [ ] T035 [US1] Create login/register components in frontend/src/components/auth/
-- [ ] T036 [US1] Create company search component in frontend/src/components/companies/CompanySearch.tsx
-- [ ] T037 [US1] Create file upload component in frontend/src/components/reports/ReportUpload.tsx
-- [ ] T038 [US1] Create analysis display component in frontend/src/components/analysis/AnalysisResults.tsx
-- [ ] T039 [US1] Create main analysis page in frontend/src/pages/AnalysisPage.tsx
-- [ ] T040 [US1] Implement async processing with status updates for long-running analysis
-- [ ] T041 [US1] Add input validation and error handling for file uploads and ticker symbols
-- [ ] T042 [US1] Add logging for analysis operations and SEC API interactions
+- [x] T035 [US1] Create login/register components in frontend/src/components/auth/
+- [x] T036 [US1] Create company search component in frontend/src/components/companies/CompanySearch.tsx
+- [x] T037 [US1] Create file upload component in frontend/src/components/reports/ReportUpload.tsx
+- [x] T038 [US1] Create analysis display component in frontend/src/components/analysis/AnalysisResults.tsx
+- [x] T039 [US1] Create main analysis page in frontend/src/pages/AnalysisPage.tsx
+- [x] T040 [US1] Implement async processing with status updates for long-running analysis
+- [x] T041 [US1] Add input validation and error handling for file uploads and ticker symbols
+- [x] T042 [US1] Add logging for analysis operations and SEC API interactions
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 

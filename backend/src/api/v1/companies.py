@@ -11,8 +11,10 @@ from sqlalchemy import func
 from ...core.security import get_current_user
 from ...database.connection import get_db
 from ...models.company import Company
+from ...models.alert import Alert
 from ...models.financial_report import FinancialReport
 from ...services.trend_analyzer import TrendAnalyzer
+from ...services.company_lookup import get_official_name_from_ticker
 
 router = APIRouter()
 
@@ -130,10 +132,11 @@ async def add_company(
         )
     
     # Create new company
+    resolved_name = get_official_name_from_ticker(company_data.ticker_symbol) or company_data.company_name
     new_company = Company(
         id=uuid.uuid4(),
         ticker_symbol=company_data.ticker_symbol.upper(),
-        company_name=company_data.company_name,
+        company_name=resolved_name,
         sector=company_data.sector,
         industry=company_data.industry,
         created_at=datetime.now(timezone.utc),
@@ -296,3 +299,41 @@ async def get_company_trends(
     analyzer = TrendAnalyzer(db)
     payload = analyzer.build_trends_payload(company_uuid, window=window)
     return {"company": {"id": str(company.id), "ticker_symbol": company.ticker_symbol}, **payload}
+
+
+@router.delete("/{company_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_company(
+    company_id: str,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Delete a company and cascade delete related records where configured."""
+    try:
+        company_uuid = uuid.UUID(company_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid company ID format"
+        )
+
+    company = db.query(Company).filter(Company.id == company_uuid).first()
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Company not found"
+        )
+
+    try:
+        # Explicitly delete dependent rows to avoid FK conflicts in some DB setups
+        db.query(Alert).filter(Alert.company_id == company_uuid).delete(synchronize_session=False)
+        db.query(FinancialReport).filter(FinancialReport.company_id == company_uuid).delete(synchronize_session=False)
+        db.delete(company)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete company"
+        )
+
+    return None

@@ -126,14 +126,14 @@
 - [x] T055 [US3] Implement AlertService with configurable thresholds in backend/src/services/alert_service.py
 - [x] T056 [US3] Create trends endpoint (/companies/{id}/trends) in backend/src/api/v1/companies.py
 - [x] T057 [US3] Create alerts endpoints (/alerts) in backend/src/api/v1/alerts.py
-- [ ] T058 [US3] Create dashboard visualization components in frontend/src/components/dashboard/
-- [ ] T059 [US3] Create timeline chart component using Recharts in frontend/src/components/charts/TimelineChart.tsx
-- [ ] T060 [US3] Create sentiment trend component in frontend/src/components/dashboard/SentimentTrends.tsx
-- [ ] T061 [US3] Create alerts management component in frontend/src/components/alerts/AlertsPanel.tsx
-- [ ] T062 [US3] Create main dashboard page in frontend/src/pages/DashboardPage.tsx
-- [ ] T063 [US3] Implement user-configurable alert thresholds (5-50% range per spec)
-- [ ] T064 [US3] Add industry-based intelligent defaults for alert thresholds
-- [ ] T065 [US3] Create alert preferences management interface
+- [x] T058 [US3] Create dashboard visualization components in frontend/src/components/dashboard/
+- [x] T059 [US3] Create timeline chart component using Recharts in frontend/src/components/charts/TimelineChart.tsx
+- [x] T060 [US3] Create sentiment trend component in frontend/src/components/dashboard/SentimentTrends.tsx
+- [x] T061 [US3] Create alerts management component in frontend/src/components/alerts/AlertsPanel.tsx
+- [x] T062 [US3] Create main dashboard page in frontend/src/pages/DashboardPage.tsx
+- [x] T063 [US3] Implement user-configurable alert thresholds (5-50% range per spec)
+- [x] T064 [US3] Add industry-based intelligent defaults for alert thresholds
+- [x] T065 [US3] Create alert preferences management interface
 
 **Checkpoint**: All core user stories should now be independently functional
 

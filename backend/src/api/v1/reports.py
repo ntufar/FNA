@@ -15,6 +15,7 @@ from ...database.connection import get_db
 from ...models.company import Company
 from ...models.financial_report import FinancialReport, ReportType, FileFormat, ProcessingStatus, DownloadSource
 from ...services.document_processor import DocumentProcessor
+from ...services.company_lookup import get_official_name_from_ticker
 
 router = APIRouter()
 
@@ -242,7 +243,6 @@ async def upload_report(
         # Save file to disk
         with open(file_path, "wb") as buffer:
             buffer.write(file_content)
-        
         # Create database record
         new_report = FinancialReport(
             id=uuid.uuid4(),
@@ -306,11 +306,12 @@ async def download_from_sec(
     ).first()
     
     if not company:
-        # Auto-create company with basic info
+        # Auto-create company with official name from SEC if available
+        official = get_official_name_from_ticker(download_request.ticker_symbol) or download_request.ticker_symbol
         company = Company(
             id=uuid.uuid4(),
             ticker_symbol=download_request.ticker_symbol,
-            company_name=f"{download_request.ticker_symbol} Corporation",  # Placeholder name
+            company_name=official,
             sector=None,
             industry=None,
             created_at=datetime.now(timezone.utc),
@@ -348,12 +349,31 @@ async def download_from_sec(
         downloaded_file_path = Path(download_result['file_path'])
         shutil.move(str(downloaded_file_path), str(file_path))
         
+        # Infer fiscal period if missing from downloader
+        inferred_fiscal_period = download_result.get('fiscal_period') or 'FY Unknown'
+        if inferred_fiscal_period == 'FY Unknown':
+            try:
+                dt = datetime.fromisoformat(download_result['filing_date']) if download_result.get('filing_date') else None
+                if dt is not None:
+                    year = dt.year
+                    rt = (download_request.report_type or '').upper()
+                    if rt in ['10-K', '10-K/A', 'ANNUAL', 'TEN_K']:
+                        inferred_fiscal_period = f"FY {year}"
+                    elif rt in ['10-Q', '10-Q/A', 'TEN_Q']:
+                        m = dt.month
+                        quarter = 'Q1' if m in [1,2,3] else 'Q2' if m in [4,5,6] else 'Q3' if m in [7,8,9] else 'Q4'
+                        inferred_fiscal_period = f"{quarter} {year}"
+                    else:
+                        inferred_fiscal_period = f"FY {year}"
+            except Exception:
+                inferred_fiscal_period = 'FY Unknown'
+
         # Create database record
         new_report = FinancialReport(
             id=uuid.uuid4(),
             company_id=company.id,
             report_type=ReportType(download_request.report_type),
-            fiscal_period=download_result.get('fiscal_period'),
+            fiscal_period=inferred_fiscal_period,
             filing_date=datetime.fromisoformat(download_result['filing_date']) if download_result.get('filing_date') else None,
             report_url=download_result.get('report_url'),
             file_path=str(file_path),

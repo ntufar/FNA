@@ -72,6 +72,14 @@ export interface Company {
   updated_at: string;
 }
 
+// Trends Types (US3)
+export interface CompanyTrendPoint {
+  date_label: string; // e.g. "Q1 2025" or ISO date
+  optimism: number; // 0..1
+  risk: number; // 0..1
+  uncertainty: number; // 0..1
+}
+
 export interface CreateCompanyRequest {
   ticker_symbol: string;
   company_name: string;
@@ -166,7 +174,7 @@ export interface Alert {
 }
 
 // Configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/v1';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8001/v1';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -347,6 +355,14 @@ class ApiClient {
   async getCompanyReports(id: string): Promise<FinancialReport[]> {
     const response = await this.client.get<FinancialReport[]>(`/companies/${id}/reports`);
     return response.data;
+  }
+
+  async getCompanyTrends(id: string): Promise<CompanyTrendPoint[]> {
+    const response = await this.client.get(`/companies/${id}/trends`);
+    const body: any = response.data;
+    if (Array.isArray(body)) return body as CompanyTrendPoint[];
+    if (Array.isArray(body?.data)) return body.data as CompanyTrendPoint[];
+    return [];
   }
 
   // Report Methods

@@ -2,9 +2,13 @@
 
 from typing import List, Dict, Any
 from fastapi import APIRouter, HTTPException, status, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ...core.security import get_current_user, require_enterprise_tier
+from ...database.connection import get_db
+from ...services.delta_analyzer import DeltaAnalyzer
+from ...models.narrative_delta import NarrativeDelta
 
 router = APIRouter()
 
@@ -149,33 +153,33 @@ async def get_analysis(
 @router.post("/compare", response_model=ComparisonResponse)
 async def compare_reports(
     comparison_request: ComparisonRequest,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Compare narrative tone between two financial reports.
-    
-    TODO: Replace with database query and actual comparison logic.
-    """
-    # TODO: Validate that both reports exist and have completed analyses
-    # TODO: Create or retrieve comparison from database
-    
-    # Mock comparison results
-    mock_comparison = {
-        "id": "comparison-1",
-        "base_analysis_id": f"analysis-{comparison_request.base_report_id}",
-        "comparison_analysis_id": f"analysis-{comparison_request.comparison_report_id}",
-        "optimism_delta": 0.15,  # Positive = more optimistic
-        "risk_delta": -0.08,     # Negative = less risk perception
-        "uncertainty_delta": -0.12, # Negative = less uncertainty  
-        "overall_sentiment_delta": 0.18,
-        "significant_changes": [
-            "Increased confidence in market position",
-            "Reduced emphasis on operational risks",
-            "More positive language around growth prospects"
-        ],
-        "delta_summary": "The latest report shows a significantly more optimistic tone compared to the previous period, with reduced risk language and increased confidence in future performance."
-    }
-    
-    return ComparisonResponse(**mock_comparison)
+    """Compare narrative tone between two financial reports using stored analyses."""
+    try:
+        delta: NarrativeDelta = DeltaAnalyzer.compare_reports(
+            db,
+            base_report_id=comparison_request.base_report_id,
+            comparison_report_id=comparison_request.comparison_report_id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    significant_changes = delta.get_alert_messages()
+    summary = delta.get_sentiment_change_summary()
+
+    return ComparisonResponse(
+        id=str(delta.id),
+        base_analysis_id=str(delta.base_analysis_id),
+        comparison_analysis_id=str(delta.comparison_analysis_id),
+        optimism_delta=delta.optimism_delta,
+        risk_delta=delta.risk_delta,
+        uncertainty_delta=delta.uncertainty_delta,
+        overall_sentiment_delta=delta.overall_sentiment_delta,
+        significant_changes=significant_changes,
+        delta_summary=summary["overall_change"]["direction"],
+    )
 
 
 @router.post("/search/similar")

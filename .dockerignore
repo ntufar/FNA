@@ -1,0 +1,50 @@
+# VCS
+.git
+.gitignore
+
+# Node/Frontend
+node_modules/
+dist/
+build/
+.next/
+out/
+.vite/
+coverage/
+*.log*
+
+# Python/Backend
+backend/**/__pycache__/
+backend/**/.mypy_cache/
+backend/**/.pytest_cache/
+backend/**/htmlcov/
+backend/**/dist/
+backend/**/build/
+backend/**/.venv/
+backend/**/venv/
+
+# Env and secrets
+.env*
+backend/.env
+secrets/
+
+# Docker files
+Dockerfile*
+.dockerignore
+
+# Local data/uploads
+backend/uploads/
+uploads/
+models/
+model_cache/
+checkpoints/
+
+# IDE/editor
+.vscode/
+.idea/
+
+# Misc
+*.tmp
+*.swp
+Thumbs.db
+.DS_Store
+

@@ -1,8 +1,11 @@
 """Authentication endpoints for FNA backend API."""
 
+import uuid
+from datetime import datetime, timezone
 from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, status, Depends
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, validator
+from sqlalchemy.orm import Session
 
 from ...core.security import (
     get_current_user,
@@ -10,6 +13,8 @@ from ...core.security import (
     hash_password,
     verify_password
 )
+from ...database.connection import get_db
+from ...models.user import User
 
 router = APIRouter()
 
@@ -25,7 +30,32 @@ class RegisterRequest(BaseModel):
     """User registration request model."""
     email: EmailStr
     password: str
+    full_name: str
     subscription_tier: str = "Basic"
+    
+    @validator('password')
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters long')
+        
+        # Check bcrypt 72-byte limit (important for Unicode characters)
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError('Password too long (maximum 72 bytes when encoded)')
+        
+        return v
+    
+    @validator('full_name')
+    def validate_full_name(cls, v):
+        if not v or len(v.strip()) < 2:
+            raise ValueError('Full name must be at least 2 characters long')
+        return v.strip()
+    
+    @validator('subscription_tier')
+    def validate_subscription_tier(cls, v):
+        valid_tiers = ["Basic", "Pro", "Enterprise"]
+        if v not in valid_tiers:
+            raise ValueError(f'Subscription tier must be one of: {", ".join(valid_tiers)}')
+        return v
 
 
 class TokenResponse(BaseModel):
@@ -42,52 +72,41 @@ class UserResponse(BaseModel):
     email: str
     subscription_tier: str
     is_active: bool
+    last_login: str = None
+    created_at: str
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(login_data: LoginRequest):
+async def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate user and return JWT tokens.
     
-    This endpoint validates user credentials and returns access/refresh tokens.
-    Currently uses mock authentication - TODO: integrate with database.
+    This endpoint validates user credentials against the database and returns access/refresh tokens.
     """
-    # TODO: Replace with actual database user lookup
-    # For now, using mock authentication for development
-    mock_users = {
-        "admin@fna.com": {
-            "id": "123e4567-e89b-12d3-a456-426614174000",
-            "email": "admin@fna.com", 
-            "password_hash": hash_password("admin123"),
-            "subscription_tier": "Enterprise",
-            "is_active": True
-        },
-        "demo@fna.com": {
-            "id": "123e4567-e89b-12d3-a456-426614174001",
-            "email": "demo@fna.com",
-            "password_hash": hash_password("demo123"), 
-            "subscription_tier": "Pro",
-            "is_active": True
-        }
-    }
+    # Look up user in database
+    user = db.query(User).filter(User.email == login_data.email).first()
     
-    user = mock_users.get(login_data.email)
-    if not user or not verify_password(login_data.password, user["password_hash"]):
+    if not user or not verify_password(login_data.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid email or password"
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"}
         )
     
-    if not user["is_active"]:
+    if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Account is inactive"
         )
     
+    # Update last login timestamp
+    user.last_login = datetime.now(timezone.utc)
+    db.commit()
+    
     # Create tokens
     user_data = {
-        "id": user["id"],
-        "email": user["email"], 
-        "subscription_tier": user["subscription_tier"]
+        "id": str(user.id),
+        "email": user.email, 
+        "subscription_tier": user.subscription_tier
     }
     
     tokens = create_user_tokens(user_data)
@@ -101,27 +120,56 @@ async def login(login_data: LoginRequest):
 
 
 @router.post("/register", response_model=TokenResponse)
-async def register(register_data: RegisterRequest):
+async def register(register_data: RegisterRequest, db: Session = Depends(get_db)):
     """Register a new user account.
     
-    Currently uses mock registration - TODO: integrate with database.
+    Creates a new user in the database with hashed password and returns authentication tokens.
     """
-    # TODO: Replace with actual database user creation
-    # For now, mock registration for development
-    
-    # Validate subscription tier
-    valid_tiers = ["Basic", "Pro", "Enterprise"]
-    if register_data.subscription_tier not in valid_tiers:
+    # Check if user already exists
+    existing_user = db.query(User).filter(User.email == register_data.email).first()
+    if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid subscription tier"
+            detail="Email already registered"
         )
     
-    # Mock user creation
+    # Create password hash with error handling
+    try:
+        password_hash = hash_password(register_data.password)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    
+    # Create new user
+    new_user = User(
+        id=uuid.uuid4(),
+        email=register_data.email,
+        full_name=register_data.full_name,
+        password_hash=password_hash,
+        subscription_tier=register_data.subscription_tier,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc)
+    )
+    
+    try:
+        db.add(new_user)
+        db.commit()
+        db.refresh(new_user)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create user account"
+        )
+    
+    # Create tokens for the new user
     user_data = {
-        "id": "new-user-123",  # Would be generated UUID in real implementation
-        "email": register_data.email,
-        "subscription_tier": register_data.subscription_tier
+        "id": str(new_user.id),
+        "email": new_user.email,
+        "subscription_tier": new_user.subscription_tier
     }
     
     tokens = create_user_tokens(user_data)
@@ -135,13 +183,27 @@ async def register(register_data: RegisterRequest):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(current_user: Dict[str, Any] = Depends(get_current_user)):
-    """Get current authenticated user information."""
+async def get_current_user_info(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Get current authenticated user information from database."""
+    # Fetch full user data from database
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
     return UserResponse(
-        id=current_user["id"],
-        email=current_user["email"],
-        subscription_tier=current_user["subscription_tier"], 
-        is_active=True  # TODO: Get from database
+        id=str(user.id),
+        email=user.email,
+        subscription_tier=user.subscription_tier,
+        is_active=user.is_active,
+        last_login=user.last_login.isoformat() if user.last_login else None,
+        created_at=user.created_at.isoformat()
     )
 
 

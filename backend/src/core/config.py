@@ -9,7 +9,7 @@ import os
 from functools import lru_cache
 from typing import Optional, List
 
-from pydantic import Field, validator
+from pydantic import Field, validator, ConfigDict
 from pydantic_settings import BaseSettings
 
 
@@ -37,11 +37,11 @@ class Settings(BaseSettings):
         description="LM Studio API base URL"
     )
     model_api_timeout: int = Field(
-        default=30,
+        default=3600,
         description="LM Studio API request timeout in seconds"
     )
     model_max_tokens: int = Field(
-        default=512,
+        default=10000,
         description="Maximum tokens for LLM generation"
     )
     model_temperature: float = Field(
@@ -186,12 +186,13 @@ class Settings(BaseSettings):
             return [ext.strip() for ext in v.split(',')]
         return v
     
-    class Config:
-        """Pydantic configuration."""
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-        env_prefix = ""  # Can be set to "FNA_" for namespacing
+    model_config = ConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        env_prefix="",  # Can be set to "FNA_" for namespacing
+        protected_namespaces=('settings_',)  # Allow model_ fields by changing protected namespace
+    )
 
 
 class DevelopmentSettings(Settings):

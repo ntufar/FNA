@@ -7,7 +7,7 @@ as specified in research.md for vector similarity search.
 import numpy as np
 from typing import List, Optional, Union, Dict, Any
 from pathlib import Path
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 # Sentence Transformers imports
 try:

@@ -72,19 +72,19 @@
 - [x] T027 [US1] Implement SECDownloader service with EDGAR API in backend/src/services/sec_downloader.py
 - [x] T028 [US1] Implement iXBRLParser service with Arelle in backend/src/services/ixbrl_parser.py
 - [x] T029 [US1] Implement DocumentProcessor service orchestrating parsing and analysis in backend/src/services/document_processor.py
-- [ ] T030 [US1] Create authentication endpoints (/auth/login, /auth/register) in backend/src/api/v1/auth.py
-- [ ] T031 [US1] Create company management endpoints (/companies) in backend/src/api/v1/companies.py
-- [ ] T032 [US1] Create report upload endpoint (/reports/upload) in backend/src/api/v1/reports.py
-- [ ] T033 [US1] Create report download endpoint (/reports/download) in backend/src/api/v1/reports.py
-- [ ] T034 [US1] Create analysis retrieval endpoint (/reports/{id}/analysis) in backend/src/api/v1/reports.py
-- [ ] T035 [US1] Create login/register components in frontend/src/components/auth/
-- [ ] T036 [US1] Create company search component in frontend/src/components/companies/CompanySearch.tsx
-- [ ] T037 [US1] Create file upload component in frontend/src/components/reports/ReportUpload.tsx
-- [ ] T038 [US1] Create analysis display component in frontend/src/components/analysis/AnalysisResults.tsx
-- [ ] T039 [US1] Create main analysis page in frontend/src/pages/AnalysisPage.tsx
-- [ ] T040 [US1] Implement async processing with status updates for long-running analysis
-- [ ] T041 [US1] Add input validation and error handling for file uploads and ticker symbols
-- [ ] T042 [US1] Add logging for analysis operations and SEC API interactions
+- [x] T030 [US1] Create authentication endpoints (/auth/login, /auth/register) in backend/src/api/v1/auth.py
+- [x] T031 [US1] Create company management endpoints (/companies) in backend/src/api/v1/companies.py
+- [x] T032 [US1] Create report upload endpoint (/reports/upload) in backend/src/api/v1/reports.py
+- [x] T033 [US1] Create report download endpoint (/reports/download) in backend/src/api/v1/reports.py
+- [x] T034 [US1] Create analysis retrieval endpoint (/reports/{id}/analysis) in backend/src/api/v1/reports.py
+- [x] T035 [US1] Create login/register components in frontend/src/components/auth/
+- [x] T036 [US1] Create company search component in frontend/src/components/companies/CompanySearch.tsx
+- [x] T037 [US1] Create file upload component in frontend/src/components/reports/ReportUpload.tsx
+- [x] T038 [US1] Create analysis display component in frontend/src/components/analysis/AnalysisResults.tsx
+- [x] T039 [US1] Create main analysis page in frontend/src/pages/AnalysisPage.tsx
+- [x] T040 [US1] Implement async processing with status updates for long-running analysis
+- [x] T041 [US1] Add input validation and error handling for file uploads and ticker symbols
+- [x] T042 [US1] Add logging for analysis operations and SEC API interactions
 
 **Checkpoint**: At this point, User Story 1 should be fully functional and testable independently
 
@@ -98,15 +98,15 @@
 
 ### Implementation for User Story 2
 
-- [ ] T043 [P] [US2] Create NarrativeDelta model with change metrics in backend/src/models/narrative_delta.py
-- [ ] T044 [US2] Implement DeltaAnalyzer service for report comparison in backend/src/services/delta_analyzer.py
-- [ ] T045 [US2] Create comparison endpoint (/analysis/compare) in backend/src/api/v1/analysis.py
-- [ ] T046 [US2] Create report comparison interface in frontend/src/components/analysis/ReportComparison.tsx
-- [ ] T047 [US2] Create delta visualization component in frontend/src/components/analysis/DeltaVisualization.tsx
-- [ ] T048 [US2] Create comparison results page in frontend/src/pages/ComparisonPage.tsx
-- [ ] T049 [US2] Implement theme evolution tracking (added, removed, changed emphasis)
-- [ ] T050 [US2] Add significance calculation (MINOR, MODERATE, MAJOR, CRITICAL) based on change thresholds
-- [ ] T051 [US2] Integrate comparison functionality with existing analysis workflow
+- [x] T043 [P] [US2] Create NarrativeDelta model with change metrics in backend/src/models/narrative_delta.py
+- [x] T044 [US2] Implement DeltaAnalyzer service for report comparison in backend/src/services/delta_analyzer.py
+- [x] T045 [US2] Create comparison endpoint (/analysis/compare) in backend/src/api/v1/analysis.py
+- [x] T046 [US2] Create report comparison interface in frontend/src/components/analysis/ReportComparison.tsx
+- [x] T047 [US2] Create delta visualization component in frontend/src/components/analysis/DeltaVisualization.tsx
+- [x] T048 [US2] Create comparison results page in frontend/src/pages/ComparisonPage.tsx
+- [x] T049 [US2] Implement theme evolution tracking (added, removed, changed emphasis)
+- [x] T050 [US2] Add significance calculation (MINOR, MODERATE, MAJOR, CRITICAL) based on change thresholds
+- [x] T051 [US2] Integrate comparison functionality with existing analysis workflow
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 
@@ -120,20 +120,20 @@
 
 ### Implementation for User Story 3
 
-- [ ] T052 [P] [US3] Create Alert model with user preferences in backend/src/models/alert.py
-- [ ] T053 [P] [US3] Create NarrativeEmbedding model for vector search in backend/src/models/narrative_embedding.py
-- [ ] T054 [US3] Implement TrendAnalyzer service for historical patterns in backend/src/services/trend_analyzer.py
-- [ ] T055 [US3] Implement AlertService with configurable thresholds in backend/src/services/alert_service.py
-- [ ] T056 [US3] Create trends endpoint (/companies/{id}/trends) in backend/src/api/v1/companies.py
-- [ ] T057 [US3] Create alerts endpoints (/alerts) in backend/src/api/v1/alerts.py
-- [ ] T058 [US3] Create dashboard visualization components in frontend/src/components/dashboard/
-- [ ] T059 [US3] Create timeline chart component using Recharts in frontend/src/components/charts/TimelineChart.tsx
-- [ ] T060 [US3] Create sentiment trend component in frontend/src/components/dashboard/SentimentTrends.tsx
-- [ ] T061 [US3] Create alerts management component in frontend/src/components/alerts/AlertsPanel.tsx
-- [ ] T062 [US3] Create main dashboard page in frontend/src/pages/DashboardPage.tsx
-- [ ] T063 [US3] Implement user-configurable alert thresholds (5-50% range per spec)
-- [ ] T064 [US3] Add industry-based intelligent defaults for alert thresholds
-- [ ] T065 [US3] Create alert preferences management interface
+- [x] T052 [P] [US3] Create Alert model with user preferences in backend/src/models/alert.py
+- [x] T053 [P] [US3] Create NarrativeEmbedding model for vector search in backend/src/models/narrative_embedding.py
+- [x] T054 [US3] Implement TrendAnalyzer service for historical patterns in backend/src/services/trend_analyzer.py
+- [x] T055 [US3] Implement AlertService with configurable thresholds in backend/src/services/alert_service.py
+- [x] T056 [US3] Create trends endpoint (/companies/{id}/trends) in backend/src/api/v1/companies.py
+- [x] T057 [US3] Create alerts endpoints (/alerts) in backend/src/api/v1/alerts.py
+- [x] T058 [US3] Create dashboard visualization components in frontend/src/components/dashboard/
+- [x] T059 [US3] Create timeline chart component using Recharts in frontend/src/components/charts/TimelineChart.tsx
+- [x] T060 [US3] Create sentiment trend component in frontend/src/components/dashboard/SentimentTrends.tsx
+- [x] T061 [US3] Create alerts management component in frontend/src/components/alerts/AlertsPanel.tsx
+- [x] T062 [US3] Create main dashboard page in frontend/src/pages/DashboardPage.tsx
+- [x] T063 [US3] Implement user-configurable alert thresholds (5-50% range per spec)
+- [x] T064 [US3] Add industry-based intelligent defaults for alert thresholds
+- [x] T065 [US3] Create alert preferences management interface
 
 **Checkpoint**: All core user stories should now be independently functional
 

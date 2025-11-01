@@ -7,7 +7,7 @@ hosted on LM Studio server for API-based inference.
 import json
 from typing import Optional, Dict, Any, List
 import requests
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class ModelSettings(BaseSettings):

@@ -12,7 +12,7 @@ import jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings
 
 
 class SecuritySettings(BaseSettings):
@@ -29,7 +29,14 @@ class SecuritySettings(BaseSettings):
 
 # Initialize settings and password context
 security_settings = SecuritySettings()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Configure bcrypt with settings to avoid initialization issues
+pwd_context = CryptContext(
+    schemes=["bcrypt"], 
+    deprecated="auto",
+    bcrypt__rounds=12,
+    bcrypt__ident="2b"  # Force specific bcrypt variant to avoid wrap bug detection
+)
 oauth2_scheme = HTTPBearer()
 
 
@@ -45,12 +52,75 @@ class AuthenticationManager:
         self.settings = settings or security_settings
     
     def hash_password(self, password: str) -> str:
-        """Hash a password using bcrypt."""
-        return pwd_context.hash(password)
+        """Hash a password using bcrypt with automatic length handling.
+        
+        Args:
+            password: Plain text password to hash
+            
+        Returns:
+            Hashed password string
+            
+        Raises:
+            ValueError: If password validation fails
+        """
+        # Ensure password is not too long for bcrypt (72 bytes max)
+        password_bytes = password.encode('utf-8')
+        if len(password_bytes) > 72:
+            raise ValueError(f"Password too long ({len(password_bytes)} bytes, max 72 bytes)")
+        
+        try:
+            # Use the safe password hashing function
+            return self._safe_bcrypt_hash(password)
+        except Exception as e:
+            # Wrap bcrypt errors with more informative messages
+            raise ValueError(f"Failed to hash password: {str(e)}") from e
+    
+    def _safe_bcrypt_hash(self, password: str) -> str:
+        """Safely hash password with bcrypt, handling initialization issues.
+        
+        This method works around bcrypt initialization problems by using
+        a direct bcrypt approach when passlib fails.
+        """
+        try:
+            return pwd_context.hash(password)
+        except Exception:
+            # If passlib fails, fall back to direct bcrypt usage
+            import bcrypt
+            # Ensure password is bytes and within limits
+            password_bytes = password.encode('utf-8')[:72]
+            salt = bcrypt.gensalt(rounds=12)
+            return bcrypt.hashpw(password_bytes, salt).decode('utf-8')
     
     def verify_password(self, plain_password: str, hashed_password: str) -> bool:
-        """Verify a password against its hash."""
-        return pwd_context.verify(plain_password, hashed_password)
+        """Verify a password against its hash.
+        
+        Args:
+            plain_password: Plain text password to verify
+            hashed_password: Stored password hash
+            
+        Returns:
+            True if password matches, False otherwise
+        """
+        try:
+            # For very long passwords, verification will fail anyway, so short-circuit
+            password_bytes = plain_password.encode('utf-8')
+            if len(password_bytes) > 72:
+                # Try with truncated password (for backward compatibility)
+                password_bytes = password_bytes[:72]
+                plain_password = password_bytes.decode('utf-8', errors='ignore')
+                
+            # Try passlib first
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception:
+            # If passlib fails, try direct bcrypt verification
+            try:
+                import bcrypt
+                password_bytes = plain_password.encode('utf-8')[:72]
+                hash_bytes = hashed_password.encode('utf-8')
+                return bcrypt.checkpw(password_bytes, hash_bytes)
+            except Exception:
+                # If all methods fail, return False
+                return False
     
     def create_access_token(self, user_data: Dict[str, Any]) -> str:
         """Create a JWT access token for a user.

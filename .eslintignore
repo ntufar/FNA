@@ -1,0 +1,37 @@
+# Ignore build and dependency artifacts
+node_modules/
+dist/
+build/
+coverage/
+.next/
+out/
+.vite/
+
+# Generated lockfiles
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Caches
+.eslintcache
+.cache/
+
+# Backend Python artifacts (avoid ESLint scanning backend)
+backend/**/__pycache__/
+backend/**/.mypy_cache/
+backend/**/.pytest_cache/
+backend/**/htmlcov/
+backend/**/dist/
+backend/**/build/
+
+# Env files
+.env*
+
+# Misc
+*.min.js
+*.log
+*.tmp
+

@@ -24,6 +24,7 @@ from .api.v1.auth import router as auth_router
 from .api.v1.companies import router as companies_router
 from .api.v1.reports import router as reports_router
 from .api.v1.analysis import router as analysis_router
+from .api.v1.alerts import router as alerts_router
 
 # Setup logging first
 setup_logging()
@@ -242,6 +243,12 @@ def register_routes(app: FastAPI):
         analysis_router,
         prefix="/v1/analysis",
         tags=["Analysis"]
+    )
+    
+    app.include_router(
+        alerts_router,
+        prefix="/v1/alerts",
+        tags=["Alerts"]
     )
     
     logger.info("API routes registered successfully")

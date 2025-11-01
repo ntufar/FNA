@@ -318,6 +318,9 @@ Focus on financial context, management tone, forward guidance, and strategic pos
         Raises:
             ModelInferenceError: If analysis fails
         """
+        logger.info(f"=====================================================")
+        logger.info(f"Analyzing text length: {len(text)}")
+        #logger.info(f"Analyzing text: {text}")
         start_time = time.time()
         
         try:

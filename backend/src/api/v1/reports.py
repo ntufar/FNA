@@ -247,6 +247,7 @@ async def upload_report(
             company_id=company_uuid,
             report_type=ReportType(report_type) if report_type in [e.value for e in ReportType] else ReportType.OTHER,
             fiscal_period=fiscal_period,
+            filing_date=datetime.now(timezone.utc).date(),
             file_path=str(file_path),
             file_format=get_file_format_from_mime_type(file.content_type),
             file_size_bytes=len(file_content),

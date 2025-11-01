@@ -166,7 +166,7 @@ export interface Alert {
 }
 
 // Configuration
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001/v1';
 
 class ApiClient {
   private client: AxiosInstance;

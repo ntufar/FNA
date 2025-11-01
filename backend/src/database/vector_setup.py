@@ -119,7 +119,18 @@ class VectorSetupManager:
             bool: True if indexes were created successfully, False otherwise
         """
         try:
+            # Obtain a connection; prefer session bind, fallback to module engine
+            from sqlalchemy.engine import Connection
+            conn: Optional[Connection] = None
             with get_db_session_context() as session:
+                try:
+                    bind = session.get_bind()
+                    if bind is not None:
+                        conn = bind.connect().execution_options(isolation_level="AUTOCOMMIT")
+                    elif 'engine' in globals() and engine is not None:  # type: ignore[name-defined]
+                        conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")  # type: ignore[misc]
+                except Exception as e:
+                    logger.debug(f"Autocommit connection unavailable, will fallback to non-concurrent indexes: {e}")
                 # List of vector indexes to create
                 vector_indexes = [
                     {
@@ -171,7 +182,20 @@ class VectorSetupManager:
                             f"WITH ({index_config['options']})"
                         )
                         
-                        session.execute(text(index_sql))
+                        if conn is not None:
+                            try:
+                                conn.execute(text(index_sql))
+                            except SQLAlchemyError:
+                                # Fallback: retry without CONCURRENTLY if autocommit not supported by DB
+                                if 'CONCURRENTLY' in index_sql.upper():
+                                    non_concurrent_sql = index_sql.upper().replace(' CONCURRENTLY', '')
+                                    conn.execute(text(non_concurrent_sql))
+                                else:
+                                    raise
+                        else:
+                            # No autocommit-capable connection; run without CONCURRENTLY using session
+                            non_concurrent_sql = index_sql.upper().replace(' CONCURRENTLY', '')
+                            session.execute(text(non_concurrent_sql))
                         logger.info(f"Created vector index: {index_config['name']}")
                         created_count += 1
                         
@@ -197,24 +221,90 @@ class VectorSetupManager:
             bool: True if indexes were created successfully, False otherwise
         """
         try:
+            # Obtain a connection; prefer session bind, fallback to module engine
+            from sqlalchemy.engine import Connection
+            conn: Optional[Connection] = None
             with get_db_session_context() as session:
-                # Performance indexes from data-model.md
+                try:
+                    bind = session.get_bind()
+                    if bind is not None:
+                        conn = bind.connect().execution_options(isolation_level="AUTOCOMMIT")
+                    elif 'engine' in globals() and engine is not None:  # type: ignore[name-defined]
+                        conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")  # type: ignore[misc]
+                except Exception as e:
+                    logger.debug(f"Autocommit connection unavailable, will fallback to non-concurrent indexes: {e}")
+                # Performance indexes from data-model.md with existence checks
                 performance_indexes = [
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_companies_ticker_symbol ON companies(ticker_symbol)",
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_financial_reports_company_filing_date ON financial_reports(company_id, filing_date DESC)",
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_narrative_analyses_report_id ON narrative_analyses(report_id)",
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_narrative_deltas_company_created ON narrative_deltas(company_id, created_at DESC)",
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_user_read_created ON alerts(user_id, is_read, created_at DESC)",
-                    "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_narrative_embeddings_analysis_section ON narrative_embeddings(analysis_id, section_type)",
+                    {
+                        'sql': "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_companies_ticker_symbol ON companies(ticker_symbol)",
+                        'table': 'companies',
+                        'columns': ['ticker_symbol'],
+                    },
+                    {
+                        'sql': "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_financial_reports_company_filing_date ON financial_reports(company_id, filing_date DESC)",
+                        'table': 'financial_reports',
+                        'columns': ['company_id', 'filing_date'],
+                    },
+                    {
+                        'sql': "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_narrative_analyses_report_id ON narrative_analyses(report_id)",
+                        'table': 'narrative_analyses',
+                        'columns': ['report_id'],
+                    },
+                    {
+                        'sql': "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_narrative_deltas_company_created ON narrative_deltas(company_id, created_at DESC)",
+                        'table': 'narrative_deltas',
+                        'columns': ['company_id', 'created_at'],
+                    },
+                    {
+                        'sql': "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_alerts_user_read_created ON alerts(user_id, is_read, created_at DESC)",
+                        'table': 'alerts',
+                        'columns': ['user_id', 'is_read', 'created_at'],
+                    },
+                    {
+                        'sql': "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_narrative_embeddings_analysis_section ON narrative_embeddings(analysis_id, section_type)",
+                        'table': 'narrative_embeddings',
+                        'columns': ['analysis_id', 'section_type'],
+                    },
                 ]
                 
                 created_count = 0
                 
-                for index_sql in performance_indexes:
+                inspector = None
+                try:
+                    inspector = inspect(bind) if 'bind' in locals() and bind is not None else inspect(engine)
+                except Exception:
+                    inspector = None
+
+                for index in performance_indexes:
                     try:
-                        session.execute(text(index_sql))
+                        # Skip index if required columns are missing
+                        if inspector is not None:
+                            existing_cols = {c['name'] for c in inspector.get_columns(index['table'])}
+                            if not set(index['columns']).issubset(existing_cols):
+                                logger.warning(
+                                    f"Skipping index on {index['table']} - missing columns: "
+                                    f"{set(index['columns']) - existing_cols}"
+                                )
+                                continue
+
+                        sql_stmt = index['sql']
+
+                        if conn is not None:
+                            try:
+                                conn.execute(text(sql_stmt))
+                            except SQLAlchemyError:
+                                # Fallback: retry without CONCURRENTLY
+                                if 'CONCURRENTLY' in sql_stmt.upper():
+                                    non_concurrent_sql = sql_stmt.upper().replace(' CONCURRENTLY', '')
+                                    conn.execute(text(non_concurrent_sql))
+                                else:
+                                    raise
+                        else:
+                            # No autocommit-capable connection; run without CONCURRENTLY using session
+                            non_concurrent_sql = sql_stmt.upper().replace(' CONCURRENTLY', '')
+                            session.execute(text(non_concurrent_sql))
                         created_count += 1
-                        logger.info(f"Created performance index: {index_sql.split('idx_')[1].split(' ON')[0]}")
+                        logger.info(f"Created performance index: {sql_stmt.split('idx_')[1].split(' ON')[0]}")
                         
                     except SQLAlchemyError as e:
                         logger.error(f"Failed to create performance index: {e}")

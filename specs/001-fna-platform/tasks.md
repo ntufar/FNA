@@ -101,12 +101,12 @@
 - [x] T043 [P] [US2] Create NarrativeDelta model with change metrics in backend/src/models/narrative_delta.py
 - [x] T044 [US2] Implement DeltaAnalyzer service for report comparison in backend/src/services/delta_analyzer.py
 - [x] T045 [US2] Create comparison endpoint (/analysis/compare) in backend/src/api/v1/analysis.py
-- [ ] T046 [US2] Create report comparison interface in frontend/src/components/analysis/ReportComparison.tsx
-- [ ] T047 [US2] Create delta visualization component in frontend/src/components/analysis/DeltaVisualization.tsx
-- [ ] T048 [US2] Create comparison results page in frontend/src/pages/ComparisonPage.tsx
-- [ ] T049 [US2] Implement theme evolution tracking (added, removed, changed emphasis)
-- [ ] T050 [US2] Add significance calculation (MINOR, MODERATE, MAJOR, CRITICAL) based on change thresholds
-- [ ] T051 [US2] Integrate comparison functionality with existing analysis workflow
+- [x] T046 [US2] Create report comparison interface in frontend/src/components/analysis/ReportComparison.tsx
+- [x] T047 [US2] Create delta visualization component in frontend/src/components/analysis/DeltaVisualization.tsx
+- [x] T048 [US2] Create comparison results page in frontend/src/pages/ComparisonPage.tsx
+- [x] T049 [US2] Implement theme evolution tracking (added, removed, changed emphasis)
+- [x] T050 [US2] Add significance calculation (MINOR, MODERATE, MAJOR, CRITICAL) based on change thresholds
+- [x] T051 [US2] Integrate comparison functionality with existing analysis workflow
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently
 

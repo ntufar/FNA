@@ -12,6 +12,7 @@ from ...core.security import get_current_user
 from ...database.connection import get_db
 from ...models.company import Company
 from ...models.financial_report import FinancialReport
+from ...services.trend_analyzer import TrendAnalyzer
 
 router = APIRouter()
 
@@ -270,3 +271,28 @@ async def get_company_reports(
             "company_name": company.company_name
         }
     }
+
+
+@router.get("/{company_id}/trends")
+async def get_company_trends(
+    company_id: str,
+    window: int = Query(3, ge=1, le=12, description="Rolling window size for averages"),
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return sentiment trend data for a company for dashboard visualizations."""
+
+    try:
+        company_uuid = uuid.UUID(company_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid company ID format"
+        )
+
+    company = db.query(Company).filter(Company.id == company_uuid).first()
+    if not company:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+
+    analyzer = TrendAnalyzer(db)
+    payload = analyzer.build_trends_payload(company_uuid, window=window)
+    return {"company": {"id": str(company.id), "ticker_symbol": company.ticker_symbol}, **payload}

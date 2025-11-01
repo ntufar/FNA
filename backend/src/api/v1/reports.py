@@ -160,6 +160,7 @@ async def list_reports(
             "fiscal_period": "FY 2024",
             "filing_date": "2024-10-31",
             "file_format": "HTML",
+            "download_source": "MANUAL_UPLOAD",
             "processing_status": "COMPLETED",
             "created_at": "2025-10-29T00:00:00"
         },
@@ -170,6 +171,7 @@ async def list_reports(
             "fiscal_period": "Q3 2024",
             "filing_date": "2024-07-31",
             "file_format": "iXBRL",
+            "download_source": "SEC_AUTO",
             "processing_status": "PROCESSING",
             "created_at": "2025-10-29T01:00:00"
         }
@@ -412,6 +414,7 @@ async def get_report(
         "fiscal_period": "FY 2024", 
         "filing_date": "2024-10-31",
         "file_format": "HTML",
+        "download_source": "MANUAL_UPLOAD",
         "processing_status": "COMPLETED",
         "created_at": "2025-10-29T00:00:00"
     }

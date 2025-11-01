@@ -747,8 +747,10 @@
                   "pm.test('Response contains trend data', function () {",
                   "    const jsonData = pm.response.json();",
                   "    pm.expect(jsonData).to.have.property('company');",
-                  "    pm.expect(jsonData).to.have.property('trends');",
-                  "    pm.expect(jsonData.trends).to.be.an('array');",
+                  "    pm.expect(jsonData).to.have.property('timeline');",
+                  "    pm.expect(jsonData).to.have.property('period_over_period');",
+                  "    pm.expect(jsonData).to.have.property('rolling_average');",
+                  "    pm.expect(jsonData.timeline).to.be.an('array');",
                   "});"
                 ]
               }
@@ -768,7 +770,7 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/companies/{{company_id}}/trends?period=2Y",
+              "raw": "{{baseUrl}}/companies/{{company_id}}/trends?window=3",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -779,9 +781,9 @@
               ],
               "query": [
                 {
-                  "key": "period",
-                  "value": "2Y",
-                  "description": "Time period: 1Y, 2Y, 5Y, ALL"
+                  "key": "window",
+                  "value": "3",
+                  "description": "Rolling average window size"
                 }
               ]
             },
@@ -806,10 +808,9 @@
                   "    pm.response.to.have.status(200);",
                   "});",
                   "",
-                  "pm.test('Response contains alerts array', function () {",
+                  "pm.test('Response is alerts array', function () {",
                   "    const jsonData = pm.response.json();",
-                  "    pm.expect(jsonData).to.have.property('alerts');",
-                  "    pm.expect(jsonData.alerts).to.be.an('array');",
+                  "    pm.expect(jsonData).to.be.an('array');",
                   "});"
                 ]
               }

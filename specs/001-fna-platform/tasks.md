@@ -120,12 +120,12 @@
 
 ### Implementation for User Story 3
 
-- [ ] T052 [P] [US3] Create Alert model with user preferences in backend/src/models/alert.py
-- [ ] T053 [P] [US3] Create NarrativeEmbedding model for vector search in backend/src/models/narrative_embedding.py
-- [ ] T054 [US3] Implement TrendAnalyzer service for historical patterns in backend/src/services/trend_analyzer.py
-- [ ] T055 [US3] Implement AlertService with configurable thresholds in backend/src/services/alert_service.py
-- [ ] T056 [US3] Create trends endpoint (/companies/{id}/trends) in backend/src/api/v1/companies.py
-- [ ] T057 [US3] Create alerts endpoints (/alerts) in backend/src/api/v1/alerts.py
+- [x] T052 [P] [US3] Create Alert model with user preferences in backend/src/models/alert.py
+- [x] T053 [P] [US3] Create NarrativeEmbedding model for vector search in backend/src/models/narrative_embedding.py
+- [x] T054 [US3] Implement TrendAnalyzer service for historical patterns in backend/src/services/trend_analyzer.py
+- [x] T055 [US3] Implement AlertService with configurable thresholds in backend/src/services/alert_service.py
+- [x] T056 [US3] Create trends endpoint (/companies/{id}/trends) in backend/src/api/v1/companies.py
+- [x] T057 [US3] Create alerts endpoints (/alerts) in backend/src/api/v1/alerts.py
 - [ ] T058 [US3] Create dashboard visualization components in frontend/src/components/dashboard/
 - [ ] T059 [US3] Create timeline chart component using Recharts in frontend/src/components/charts/TimelineChart.tsx
 - [ ] T060 [US3] Create sentiment trend component in frontend/src/components/dashboard/SentimentTrends.tsx

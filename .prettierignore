@@ -1,0 +1,32 @@
+# Dependencies and builds
+node_modules/
+dist/
+build/
+.next/
+out/
+.vite/
+
+# Test coverage and reports
+coverage/
+backend/htmlcov/
+
+# Lockfiles (avoid formatting churn)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated assets
+public/
+**/*.min.js
+
+# Env and secrets
+.env*
+secrets/
+
+# Backend sources (Prettier not needed on Python)
+backend/**
+
+# Misc
+*.log
+*.tmp
+

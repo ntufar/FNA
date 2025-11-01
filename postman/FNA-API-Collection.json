@@ -711,7 +711,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"base_analysis_id\": \"{{analysis_id}}\",\n  \"comparison_analysis_id\": \"00000000-0000-0000-0000-000000000002\"\n}"
+              "raw": "{\n  \"base_report_id\": \"{{report_id}}\",\n  \"comparison_report_id\": \"00000000-0000-0000-0000-000000000002\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/analysis/compare",
@@ -723,7 +723,7 @@
                 "compare"
               ]
             },
-            "description": "Compare two report analyses and generate delta analysis"
+            "description": "Compare two financial reports (by report_id). The API resolves latest analyses per report and returns deltas and significance."
           }
         }
       ],

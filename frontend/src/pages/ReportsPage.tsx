@@ -181,6 +181,15 @@ const ReportsPage: React.FC = () => {
                           Re-run Analysis
                         </button>
                       )}
+                      {r.processing_status === 'PENDING' && (
+                        <button
+                          onClick={() => handleReanalyze(r.id)}
+                          className="text-amber-600 hover:text-amber-800"
+                          title="Re-process (restart analysis)"
+                        >
+                          Re-process
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>

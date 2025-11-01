@@ -45,3 +45,27 @@ async def list_alerts(
     ]
 
 
+class AlertPreferenceRequest(BaseModel):
+    company_id: str
+    alert_type: str
+    threshold_percentage: float
+
+
+@router.post("/preferences", status_code=status.HTTP_201_CREATED)
+async def create_alert_preference(
+    pref: AlertPreferenceRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Create or update an alert preference. Currently acts as a no-op placeholder.
+    Accepts the payload and returns 201 so the UI can proceed.
+    """
+    # TODO: Persist preferences in a dedicated table and enforce per-user/company settings
+    return {
+        "user_id": current_user["id"],
+        "company_id": pref.company_id,
+        "alert_type": pref.alert_type,
+        "threshold_percentage": pref.threshold_percentage,
+        "status": "accepted",
+    }
+

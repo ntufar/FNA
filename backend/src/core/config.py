@@ -37,11 +37,11 @@ class Settings(BaseSettings):
         description="LM Studio API base URL"
     )
     model_api_timeout: int = Field(
-        default=300,
+        default=3600,
         description="LM Studio API request timeout in seconds"
     )
     model_max_tokens: int = Field(
-        default=512,
+        default=10000,
         description="Maximum tokens for LLM generation"
     )
     model_temperature: float = Field(

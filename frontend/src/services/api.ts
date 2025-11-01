@@ -365,6 +365,15 @@ class ApiClient {
   async getCompanyTrends(id: string): Promise<CompanyTrendPoint[]> {
     const response = await this.client.get(`/companies/${id}/trends`);
     const body: any = response.data;
+    // Backend returns shape: { company: {...}, timeline: [{ date, optimism, risk, uncertainty }], ... }
+    if (Array.isArray(body?.timeline)) {
+      return (body.timeline as any[]).map((p) => ({
+        date_label: p.date || '',
+        optimism: typeof p.optimism === 'number' ? p.optimism : null,
+        risk: typeof p.risk === 'number' ? p.risk : null,
+        uncertainty: typeof p.uncertainty === 'number' ? p.uncertainty : null,
+      })) as CompanyTrendPoint[];
+    }
     if (Array.isArray(body)) return body as CompanyTrendPoint[];
     if (Array.isArray(body?.data)) return body.data as CompanyTrendPoint[];
     return [];

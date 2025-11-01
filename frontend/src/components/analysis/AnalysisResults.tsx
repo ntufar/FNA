@@ -39,11 +39,16 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ analysis }) => {
         <div className="text-sm font-medium text-gray-700 mb-2">Key Themes</div>
         {analysis.key_themes?.length ? (
           <div className="flex flex-wrap gap-2">
-            {analysis.key_themes.map((t) => (
-              <span key={t} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded">
-                {t}
-              </span>
-            ))}
+            {analysis.key_themes.map((t, idx) => {
+              const isObj = t && typeof t === 'object';
+              const term = isObj ? (t as any).term ?? JSON.stringify(t) : (t as string);
+              const weight = isObj ? (t as any).weight : undefined;
+              return (
+                <span key={`${term}-${idx}`} className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded">
+                  {term}{typeof weight === 'number' ? ` (${Math.round(weight * 100)}%)` : ''}
+                </span>
+              );
+            })}
           </div>
         ) : (
           <div className="text-sm text-gray-500">No themes extracted.</div>
@@ -54,9 +59,19 @@ const AnalysisResults: React.FC<AnalysisResultsProps> = ({ analysis }) => {
         <div className="bg-white rounded-lg shadow p-4">
           <div className="text-sm font-medium text-gray-700 mb-2">Risk Indicators</div>
           <ul className="list-disc list-inside text-sm text-gray-700">
-            {analysis.risk_indicators.map((r) => (
-              <li key={r}>{r}</li>
-            ))}
+            {analysis.risk_indicators.map((r, idx) => {
+              if (r && typeof r === 'object') {
+                const o: any = r;
+                const label = o.detail || o.term || o.type || JSON.stringify(o);
+                const meta = [o.severity, o.type].filter(Boolean).join(' • ');
+                return (
+                  <li key={`risk-${idx}`}>
+                    {label}{meta ? ` (${meta})` : ''}
+                  </li>
+                );
+              }
+              return <li key={`risk-${idx}`}>{String(r)}</li>;
+            })}
           </ul>
         </div>
       ) : null}

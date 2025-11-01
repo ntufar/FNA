@@ -5,10 +5,12 @@
  */
 
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { apiClient, Company, FinancialReport } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const ReportsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = React.useState(true);
   const [companies, setCompanies] = React.useState<Company[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string | ''>('');
@@ -53,6 +55,18 @@ const ReportsPage: React.FC = () => {
       setDownloadTicker('');
     } finally {
       setIsDownloading(false);
+    }
+  }
+
+  async function handleReanalyze(reportId: string) {
+    // Optimistically set status to PENDING
+    setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'PENDING' } : r)));
+    try {
+      await apiClient.triggerAnalysis(reportId);
+      // Optionally reflect immediate PENDING state; background task will update to COMPLETED/FAILED later
+    } catch (e) {
+      // On error, revert status
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'FAILED' } : r)));
     }
   }
 
@@ -141,7 +155,7 @@ const ReportsPage: React.FC = () => {
               {reports.map((r) => (
                 <tr key={r.id}>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {r.company?.company_name || companyById[r.company_id]?.company_name || r.company_id}
+                    {r.company_name || r.ticker_symbol || r.company?.company_name || companyById[r.company_id]?.company_name || r.company_id}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{r.report_type}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{r.filing_date || '—'}</td>
@@ -151,7 +165,23 @@ const ReportsPage: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                    <button className="text-blue-600 hover:text-blue-800">Analyze</button>
+                    <div className="flex gap-3 justify-end">
+                      <button
+                        onClick={() => navigate('/analysis', { state: { reportId: r.id } })}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Analyze
+                      </button>
+                      {r.processing_status === 'FAILED' && (
+                        <button
+                          onClick={() => handleReanalyze(r.id)}
+                          className="text-red-600 hover:text-red-800"
+                          title="Re-run analysis"
+                        >
+                          Re-run Analysis
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

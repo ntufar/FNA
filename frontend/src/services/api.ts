@@ -91,6 +91,8 @@ export interface CreateCompanyRequest {
 export interface FinancialReport {
   id: string;
   company_id: string;
+  company_name?: string; // provided by backend list endpoint
+  ticker_symbol?: string; // provided by backend list endpoint
   report_type: '10-K' | '10-Q' | '8-K' | 'Annual' | 'Other';
   fiscal_period: string;
   filing_date: string;
@@ -119,6 +121,9 @@ export interface DownloadReportRequest {
 }
 
 // Analysis Types
+export interface ThemeObject { term: string; weight?: number }
+export interface RiskIndicatorObject { type?: string; severity?: string; detail?: string; term?: string; weight?: number; [k: string]: any }
+
 export interface NarrativeAnalysis {
   id: string;
   report_id: string;
@@ -128,8 +133,8 @@ export interface NarrativeAnalysis {
   risk_confidence: number;
   uncertainty_score: number;
   uncertainty_confidence: number;
-  key_themes: string[];
-  risk_indicators: string[];
+  key_themes: Array<string | ThemeObject>;
+  risk_indicators: Array<string | RiskIndicatorObject>;
   narrative_sections: Record<string, string>;
   financial_metrics?: Record<string, any>;
   processing_time_seconds: number;
@@ -406,6 +411,38 @@ class ApiClient {
   async getReportAnalysis(reportId: string): Promise<NarrativeAnalysis> {
     const response = await this.client.get<NarrativeAnalysis>(`/reports/${reportId}/analysis`);
     return response.data;
+  }
+
+  async waitForReportAnalysis(
+    reportId: string,
+    options: { pollIntervalMs?: number; timeoutMs?: number } = {}
+  ): Promise<NarrativeAnalysis> {
+    const pollIntervalMs = options.pollIntervalMs ?? 3000;
+    const timeoutMs = options.timeoutMs ?? 60000;
+    const start = Date.now();
+
+    /* eslint-disable no-constant-condition */
+    while (true) {
+      const response = await this.client.get<NarrativeAnalysis | { detail?: string }>(`/reports/${reportId}/analysis`, {
+        validateStatus: () => true,
+      });
+
+      if (response.status === 200) {
+        return response.data as NarrativeAnalysis;
+      }
+
+      if (response.status === 202) {
+        if (Date.now() - start >= timeoutMs) {
+          throw new Error('Analysis is still processing. Please try again later.');
+        }
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        continue;
+      }
+
+      // Other statuses: surface error via generic handler
+      const err = new Error((response.data as any)?.detail || 'Failed to fetch analysis');
+      throw err;
+    }
   }
 
   async triggerAnalysis(reportId: string): Promise<NarrativeAnalysis> {

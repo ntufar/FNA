@@ -37,7 +37,7 @@ class Settings(BaseSettings):
         description="LM Studio API base URL"
     )
     model_api_timeout: int = Field(
-        default=30,
+        default=300,
         description="LM Studio API request timeout in seconds"
     )
     model_max_tokens: int = Field(

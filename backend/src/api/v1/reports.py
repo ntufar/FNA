@@ -58,15 +58,47 @@ def generate_file_path(company_id: str, filename: str) -> Path:
 
 
 async def process_report_background(report_id: str):
-    """Background task to process uploaded report."""
+    """Background task to process uploaded report via local LLM (http://127.0.0.1:1234)."""
+    from ...database.connection import get_db_session_context  # type: ignore
+    from ...models.financial_report import FinancialReport  # type: ignore
+    from ...models.narrative_analysis import NarrativeAnalysis  # type: ignore
+    from ...models.narrative_embedding import NarrativeEmbedding  # type: ignore
+
     try:
-        # This would typically be handled by a task queue (Celery, etc.)
-        # For now, we'll use a simple background task
         processor = DocumentProcessor()
-        # await processor.process_report(report_id)  # This would be implemented
-        pass
+
+        # Open a DB session context for the whole processing transaction
+        with get_db_session_context() as db:
+            # Load report
+            try:
+                report_uuid = uuid.UUID(report_id)
+            except ValueError:
+                # Invalid report id, nothing to do
+                return
+
+            report: FinancialReport = db.query(FinancialReport).filter(FinancialReport.id == report_uuid).first()
+            if not report:
+                return
+
+            # Run processing pipeline (extract text, analyze via local LLM, generate embeddings)
+            processing_result = processor.process_financial_report(report, include_embeddings=True)
+
+            # Persist results if successful
+            if processing_result.narrative_analysis:
+                analysis: NarrativeAnalysis = processing_result.narrative_analysis
+                db.add(analysis)
+
+            if processing_result.embeddings:
+                for emb in processing_result.embeddings:
+                    db.add(emb)
+
+            # Report status changes are applied to report by processor; flush/commit handled by context
+            # Ensure objects are flushed so IDs are available
+            db.flush()
+
+            # Nothing else; context manager will commit
     except Exception as e:
-        # Log error and update report status
+        # Best-effort logging; avoid crashing background task
         print(f"Error processing report {report_id}: {e}")
 
 
@@ -146,48 +178,51 @@ async def list_reports(
     status: str = None,
     skip: int = 0,
     limit: int = 50,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """List financial reports with optional filtering.
+    """List financial reports with optional filtering from the database."""
+    query = db.query(FinancialReport).order_by(FinancialReport.filing_date.desc())
     
-    TODO: Replace with database query with proper filtering.
-    """
-    # Mock reports for development
-    mock_reports = [
-        {
-            "id": "report-1",
-            "company_id": "company-1", 
-            "report_type": "10-K",
-            "fiscal_period": "FY 2024",
-            "filing_date": "2024-10-31",
-            "file_format": "HTML",
-            "download_source": "MANUAL_UPLOAD",
-            "processing_status": "COMPLETED",
-            "created_at": "2025-10-29T00:00:00"
-        },
-        {
-            "id": "report-2",
-            "company_id": "company-1",
-            "report_type": "10-Q", 
-            "fiscal_period": "Q3 2024",
-            "filing_date": "2024-07-31",
-            "file_format": "iXBRL",
-            "download_source": "SEC_AUTO",
-            "processing_status": "PROCESSING",
-            "created_at": "2025-10-29T01:00:00"
-        }
-    ]
-    
-    # Apply mock filtering
-    filtered_reports = mock_reports
+    # Filters
     if company_id:
-        filtered_reports = [r for r in filtered_reports if r["company_id"] == company_id]
+        try:
+            company_uuid = uuid.UUID(company_id)
+            query = query.filter(FinancialReport.company_id == company_uuid)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid company ID format")
     if report_type:
-        filtered_reports = [r for r in filtered_reports if r["report_type"] == report_type] 
+        try:
+            query = query.filter(FinancialReport.report_type == ReportType(report_type))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report type")
     if status:
-        filtered_reports = [r for r in filtered_reports if r["processing_status"] == status]
-    
-    return filtered_reports[skip:skip + limit]
+        try:
+            query = query.filter(FinancialReport.processing_status == ProcessingStatus(status))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
+
+    reports = query.offset(skip).limit(limit).all()
+
+    results: List[ReportResponse] = []
+    for r in reports:
+        results.append(ReportResponse(
+            id=str(r.id),
+            company_id=str(r.company_id),
+            company_name=r.company.company_name if r.company else None,
+            ticker_symbol=r.company.ticker_symbol if r.company else None,
+            report_type=r.report_type.value if r.report_type else "Other",
+            fiscal_period=r.fiscal_period,
+            filing_date=r.filing_date.isoformat() if r.filing_date else None,
+            file_format=r.file_format.value if r.file_format else "TXT",
+            file_size_bytes=r.file_size_bytes,
+            download_source=r.download_source.value if r.download_source else "MANUAL_UPLOAD",
+            processing_status=r.processing_status.value if r.processing_status else "PENDING",
+            created_at=r.created_at.isoformat() if r.created_at else datetime.now(timezone.utc).isoformat(),
+            processed_at=r.processed_at.isoformat() if r.processed_at else None,
+        ))
+
+    return results
 
 
 @router.post("/upload", response_model=ReportUploadResponse)
@@ -414,32 +449,34 @@ async def download_from_sec(
 @router.get("/{report_id}", response_model=ReportResponse)
 async def get_report(
     report_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
-    """Get detailed information about a specific report.
-    
-    TODO: Replace with database query.
-    """
-    # Mock report lookup
-    if not report_id.startswith("report-"):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Report not found"
-        )
-    
-    mock_report = {
-        "id": report_id,
-        "company_id": "company-1",
-        "report_type": "10-K",
-        "fiscal_period": "FY 2024", 
-        "filing_date": "2024-10-31",
-        "file_format": "HTML",
-        "download_source": "MANUAL_UPLOAD",
-        "processing_status": "COMPLETED",
-        "created_at": "2025-10-29T00:00:00"
-    }
-    
-    return ReportResponse(**mock_report)
+    """Get detailed information about a specific report from the database."""
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report ID format")
+
+    r = db.query(FinancialReport).filter(FinancialReport.id == report_uuid).first()
+    if not r:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    return ReportResponse(
+        id=str(r.id),
+        company_id=str(r.company_id),
+        company_name=r.company.company_name if r.company else None,
+        ticker_symbol=r.company.ticker_symbol if r.company else None,
+        report_type=r.report_type.value if r.report_type else "Other",
+        fiscal_period=r.fiscal_period,
+        filing_date=r.filing_date.isoformat() if r.filing_date else None,
+        file_format=r.file_format.value if r.file_format else "TXT",
+        file_size_bytes=r.file_size_bytes,
+        download_source=r.download_source.value if r.download_source else "MANUAL_UPLOAD",
+        processing_status=r.processing_status.value if r.processing_status else "PENDING",
+        created_at=r.created_at.isoformat() if r.created_at else datetime.now(timezone.utc).isoformat(),
+        processed_at=r.processed_at.isoformat() if r.processed_at else None,
+    )
 
 
 class AnalysisResponse(BaseModel):
@@ -534,6 +571,38 @@ async def get_report_analysis(
         model_version=analysis.model_version or "qwen3-4b-2507",
         created_at=analysis.created_at.isoformat()
     )
+
+
+@router.post("/{report_id}/analyze")
+async def reanalyze_report(
+    report_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Re-run analysis for a report by resetting status and queuing background processing."""
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report ID format")
+
+    report = db.query(FinancialReport).filter(FinancialReport.id == report_uuid).first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    # Reset to pending and enqueue analysis
+    report.reset_to_pending()
+    report.updated_at = datetime.now(timezone.utc)
+    db.add(report)
+    db.commit()
+
+    background_tasks.add_task(process_report_background, report_id)
+
+    return {
+        "report_id": report_id,
+        "message": "Report re-queued for analysis",
+        "processing_status": ProcessingStatus.PENDING.value,
+    }
 
 
 @router.post("/batch", response_model=List[ReportUploadResponse])

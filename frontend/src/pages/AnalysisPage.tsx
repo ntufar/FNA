@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import AnalysisResults from '../components/analysis/AnalysisResults';
 import apiClient, { FinancialReport, NarrativeAnalysis } from '../services/api';
 
@@ -14,6 +15,7 @@ const AnalysisPage: React.FC = () => {
   const [analysis, setAnalysis] = useState<NarrativeAnalysis | null>(null);
   const [loadingReports, setLoadingReports] = useState<boolean>(false);
   const [running, setRunning] = useState<boolean>(false);
+  const location = useLocation() as { state?: { reportId?: string } };
 
   useEffect(() => {
     let ignore = false;
@@ -30,11 +32,19 @@ const AnalysisPage: React.FC = () => {
     return () => { ignore = true; };
   }, []);
 
+  // Auto-select report if navigated with reportId state
+  useEffect(() => {
+    const passedReportId = location?.state?.reportId;
+    if (passedReportId) {
+      setSelectedReportId(passedReportId);
+    }
+  }, [location]);
+
   const handleAnalyze = async () => {
     if (!selectedReportId) return;
     setRunning(true);
     try {
-      const result = await apiClient.triggerAnalysis(selectedReportId);
+      const result = await apiClient.waitForReportAnalysis(selectedReportId, { pollIntervalMs: 3000, timeoutMs: 120000 });
       setAnalysis(result);
     } finally {
       setRunning(false);
@@ -62,11 +72,19 @@ const AnalysisPage: React.FC = () => {
               <option value="" disabled>
                 {loadingReports ? 'Loading reports…' : 'Select a report'}
               </option>
-              {reports.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.report_type} • {r.filing_date} • {r.file_format}
-                </option>
-              ))}
+              {reports.map((r) => {
+                const companyLabel = r.company_name || r.ticker_symbol || r.company?.company_name || r.company?.ticker_symbol || r.company_id;
+                const period = r.fiscal_period || '';
+                const date = r.filing_date || '';
+                const status = r.processing_status;
+                const idSuffix = r.id ? r.id.slice(0, 8) : '';
+                const label = `${companyLabel} • ${r.report_type}${period ? ' • ' + period : ''}${date ? ' • ' + date : ''} • ${status} • ${idSuffix}`;
+                return (
+                  <option key={r.id} value={r.id}>
+                    {label}
+                  </option>
+                );
+              })}
             </select>
             <button
               onClick={handleAnalyze}

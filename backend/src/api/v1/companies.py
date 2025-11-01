@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, HTTPException, status, Depends, Query
+import logging
 from pydantic import BaseModel, validator
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -13,10 +14,13 @@ from ...database.connection import get_db
 from ...models.company import Company
 from ...models.alert import Alert
 from ...models.financial_report import FinancialReport
+from ...models.narrative_delta import NarrativeDelta
+from ...models.narrative_analysis import NarrativeAnalysis
 from ...services.trend_analyzer import TrendAnalyzer
 from ...services.company_lookup import get_official_name_from_ticker
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 # Request/Response models
@@ -324,12 +328,31 @@ async def delete_company(
         )
 
     try:
-        # Explicitly delete dependent rows to avoid FK conflicts in some DB setups
+        # 1) Delete alerts tied to the company using bulk delete to avoid SELECT on missing columns
         db.query(Alert).filter(Alert.company_id == company_uuid).delete(synchronize_session=False)
+        db.flush()
+
+        # 2) Delete narrative deltas for this company via bulk delete
+        db.query(NarrativeDelta).filter(NarrativeDelta.company_id == company_uuid).delete(synchronize_session=False)
+        db.flush()
+
+        # 3) Delete narrative analyses for reports belonging to this company
+        report_ids_subq = db.query(FinancialReport.id).filter(FinancialReport.company_id == company_uuid).subquery()
+        db.query(NarrativeAnalysis).filter(NarrativeAnalysis.report_id.in_(report_ids_subq)).delete(synchronize_session=False)
+        db.flush()
+
+        # 4) Delete financial reports for this company via bulk delete
         db.query(FinancialReport).filter(FinancialReport.company_id == company_uuid).delete(synchronize_session=False)
-        db.delete(company)
+        db.flush()
+
+        # 5) Finally delete the company via bulk delete
+        db.query(Company).filter(Company.id == company_uuid).delete(synchronize_session=False)
+
         db.commit()
-    except Exception:
+    except Exception as e:
+        logger.exception("Failed to delete company", extra={
+            "company_id": company_id
+        })
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

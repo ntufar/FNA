@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient, Company, FinancialReport } from '../services/api';
+import { apiClient, Company, FinancialReport, ReportUploadResponse } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
 const ReportsPage: React.FC = () => {
@@ -29,14 +29,9 @@ const ReportsPage: React.FC = () => {
     let mounted = true;
     async function load() {
       try {
-        const [companyList, reportList] = await Promise.all([
-          apiClient.getCompanies(),
-          apiClient.getReports(),
-        ]);
+        const companyList = await apiClient.getCompanies();
         if (!mounted) return;
         setCompanies(companyList);
-        setReports(Array.isArray(reportList) ? reportList : []);
-        if (companyList[0]) setSelectedCompanyId(companyList[0].id);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -45,13 +40,55 @@ const ReportsPage: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
+  // Load reports when company filter changes
+  React.useEffect(() => {
+    let mounted = true;
+    async function loadReports() {
+      try {
+        setIsLoading(true);
+        const params = selectedCompanyId ? { company_id: selectedCompanyId } : undefined;
+        const reportList = await apiClient.getReports(params);
+        if (!mounted) return;
+        setReports(Array.isArray(reportList) ? reportList : []);
+      } catch (error) {
+        console.error('Failed to load reports:', error);
+        if (!mounted) return;
+        setReports([]);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+    loadReports();
+    return () => { mounted = false; };
+  }, [selectedCompanyId]);
+
   async function handleDownloadFromSEC() {
     if (!downloadTicker) return;
     setIsDownloading(true);
     try {
-      const fr = await apiClient.downloadReport({ ticker_symbol: downloadTicker.toUpperCase(), report_type: downloadType });
-      // Prepend new report if returned
-      if (fr) setReports((prev) => [fr, ...prev]);
+      const res: ReportUploadResponse = await apiClient.downloadReport({ ticker_symbol: downloadTicker.toUpperCase(), report_type: downloadType });
+      // Optimistically add a pending placeholder, then replace with fetched report
+      const placeholder: FinancialReport = {
+        id: res.report_id,
+        company_id: '',
+        report_type: downloadType,
+        fiscal_period: '',
+        filing_date: '',
+        file_path: res.file_path || '',
+        file_format: 'HTML',
+        file_size_bytes: 0,
+        download_source: 'SEC_AUTO',
+        processing_status: 'PENDING',
+        created_at: new Date().toISOString(),
+      } as any;
+      setReports((prev) => [placeholder, ...prev]);
+      // Fetch full report details
+      try {
+        const full = await apiClient.getReport(res.report_id);
+        setReports((prev) => [full, ...prev.filter((r) => r.id !== res.report_id)]);
+      } catch (_) {
+        // Keep placeholder if fetch fails
+      }
       setDownloadTicker('');
     } finally {
       setIsDownloading(false);
@@ -116,12 +153,13 @@ const ReportsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-700">Company</label>
+              <label className="text-sm text-gray-700">Filter by Company</label>
               <select
                 className="border border-gray-300 rounded px-2 py-1 text-sm"
                 value={selectedCompanyId}
                 onChange={(e) => setSelectedCompanyId(e.target.value)}
               >
+                <option value="">All Companies</option>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.company_name} ({c.ticker_symbol})</option>
                 ))}

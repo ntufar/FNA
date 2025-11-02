@@ -227,7 +227,6 @@ async def list_reports(
 
 @router.post("/upload", response_model=ReportUploadResponse)
 async def upload_report(
-    background_tasks: BackgroundTasks,
     company_id: str = Form(...),
     report_type: str = Form("Other"),
     fiscal_period: Optional[str] = Form(None),
@@ -298,9 +297,6 @@ async def upload_report(
         db.commit()
         db.refresh(new_report)
         
-        # Queue background processing
-        background_tasks.add_task(process_report_background, str(new_report.id))
-        
         return ReportUploadResponse(
             report_id=str(new_report.id),
             message=f"File '{file.filename}' uploaded successfully and queued for processing",
@@ -360,7 +356,47 @@ async def download_from_sec(
         # Initialize SEC downloader
         sec_downloader = SECDownloader()
         
-        # Download latest filing
+        # First, get filing info to check for duplicates before downloading
+        filing_info = sec_downloader.get_latest_filing(
+            download_request.ticker_symbol,
+            download_request.report_type
+        )
+        
+        if not filing_info:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"No {download_request.report_type} filings found for {download_request.ticker_symbol}"
+            )
+        
+        # Check if this report already exists
+        # Match on: company_id, report_type, and filing_date
+        filing_date = None
+        if filing_info.filing_date:
+            try:
+                # SEC filing dates are in YYYY-MM-DD format
+                filing_date = datetime.strptime(filing_info.filing_date, "%Y-%m-%d").date()
+            except (ValueError, AttributeError):
+                # If parsing fails, log but continue with download
+                pass
+        
+        if filing_date:
+            existing_report = db.query(FinancialReport).filter(
+                FinancialReport.company_id == company.id,
+                FinancialReport.report_type == ReportType(download_request.report_type),
+                FinancialReport.filing_date == filing_date
+            ).first()
+            
+            if existing_report:
+                # Report already exists, return existing report info
+                return ReportUploadResponse(
+                    report_id=str(existing_report.id),
+                    message=f"Report already exists for {download_request.ticker_symbol} ({download_request.report_type}) filed on {filing_date}",
+                    processing_status=existing_report.processing_status.value if existing_report.processing_status else ProcessingStatus.PENDING.value,
+                    file_path=str(Path(existing_report.file_path).relative_to(UPLOAD_DIR)) if existing_report.file_path else None,
+                    estimated_processing_time=None
+                )
+        
+        # No duplicate found, proceed with download
         download_result = await sec_downloader.download_latest_filing(
             ticker_symbol=download_request.ticker_symbol,
             report_type=download_request.report_type,
@@ -423,9 +459,6 @@ async def download_from_sec(
         db.add(new_report)
         db.commit()
         db.refresh(new_report)
-        
-        # Queue background processing
-        background_tasks.add_task(process_report_background, str(new_report.id))
         
         return ReportUploadResponse(
             report_id=str(new_report.id),
@@ -576,11 +609,10 @@ async def get_report_analysis(
 @router.post("/{report_id}/analyze")
 async def reanalyze_report(
     report_id: str,
-    background_tasks: BackgroundTasks,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Re-run analysis for a report by resetting status and queuing background processing."""
+    """Re-run analysis for a report by resetting status only (processing via CLI)."""
     try:
         report_uuid = uuid.UUID(report_id)
     except ValueError:
@@ -590,17 +622,15 @@ async def reanalyze_report(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
-    # Reset to pending and enqueue analysis
+    # Reset to pending only; CLI will perform processing
     report.reset_to_pending()
     report.updated_at = datetime.now(timezone.utc)
     db.add(report)
     db.commit()
 
-    background_tasks.add_task(process_report_background, report_id)
-
     return {
         "report_id": report_id,
-        "message": "Report re-queued for analysis",
+        "message": "Report status reset to PENDING. Use CLI to process.",
         "processing_status": ProcessingStatus.PENDING.value,
     }
 

@@ -120,6 +120,14 @@ export interface DownloadReportRequest {
   year?: number;
 }
 
+export interface ReportUploadResponse {
+  report_id: string;
+  message: string;
+  processing_status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  file_path?: string;
+  estimated_processing_time?: string;
+}
+
 // Analysis Types
 export interface ThemeObject { term: string; weight?: number }
 export interface RiskIndicatorObject { type?: string; severity?: string; detail?: string; term?: string; weight?: number; [k: string]: any }
@@ -380,7 +388,7 @@ class ApiClient {
   }
 
   // Report Methods
-  async uploadReport(reportData: UploadReportRequest): Promise<FinancialReport> {
+  async uploadReport(reportData: UploadReportRequest): Promise<ReportUploadResponse> {
     const formData = new FormData();
     formData.append('file', reportData.file);
     formData.append('company_id', reportData.company_id);
@@ -389,7 +397,7 @@ class ApiClient {
       formData.append('fiscal_period', reportData.fiscal_period);
     }
 
-    const response = await this.client.post<FinancialReport>('/reports/upload', formData, {
+    const response = await this.client.post<ReportUploadResponse>('/reports/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -397,8 +405,8 @@ class ApiClient {
     return response.data;
   }
 
-  async downloadReport(downloadData: DownloadReportRequest): Promise<FinancialReport> {
-    const response = await this.client.post<FinancialReport>('/reports/download', downloadData);
+  async downloadReport(downloadData: DownloadReportRequest): Promise<ReportUploadResponse> {
+    const response = await this.client.post<ReportUploadResponse>('/reports/download', downloadData);
     return response.data;
   }
 
@@ -407,8 +415,8 @@ class ApiClient {
     return response.data;
   }
 
-  async getReports(): Promise<FinancialReport[]> {
-    const response = await this.client.get<FinancialReport[]>('/reports');
+  async getReports(params?: { company_id?: string; report_type?: string; status?: string; skip?: number; limit?: number }): Promise<FinancialReport[]> {
+    const response = await this.client.get<FinancialReport[]>('/reports', { params });
     return response.data;
   }
 
@@ -420,6 +428,16 @@ class ApiClient {
   async getReportAnalysis(reportId: string): Promise<NarrativeAnalysis> {
     const response = await this.client.get<NarrativeAnalysis>(`/reports/${reportId}/analysis`);
     return response.data;
+  }
+
+  async getAnalyses(params?: { report_id?: string; company_id?: string; skip?: number; limit?: number }): Promise<NarrativeAnalysis[]> {
+    const response = await this.client.get<NarrativeAnalysis[]>('/analysis', { params });
+    return response.data as any; // backend may return partial fields in dev; cast for now
+  }
+
+  async getAnalysis(analysisId: string): Promise<NarrativeAnalysis> {
+    const response = await this.client.get<NarrativeAnalysis>(`/analysis/${analysisId}`);
+    return response.data as any;
   }
 
   async waitForReportAnalysis(

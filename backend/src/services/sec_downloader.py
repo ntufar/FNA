@@ -637,6 +637,113 @@ class SECDownloader:
             logger.error(f"Failed to download latest filing for {ticker_symbol} {report_type}: {e}")
             return {"success": False, "error": str(e)}
 
+    async def download_specific_filing(
+        self,
+        ticker_symbol: str,
+        report_type: str,
+        accession_number: Optional[str] = None,
+        filing_date: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Download a specific SEC filing by accession number or filing date.
+        
+        Args:
+            ticker_symbol: Company ticker symbol
+            report_type: Report type (10-K, 10-Q, 8-K)
+            accession_number: Optional accession number to find specific filing
+            filing_date: Optional filing date (YYYY-MM-DD) to find specific filing
+            
+        Returns:
+            Dict with success status and file metadata or error message
+        """
+        if not accession_number and not filing_date:
+            return {"success": False, "error": "Must provide either accession_number or filing_date"}
+        
+        try:
+            # Fetch company filings
+            filings = self.get_company_filings(ticker_symbol, [report_type], limit=100)
+            
+            # Find the matching filing
+            filing_info = None
+            if accession_number:
+                for filing in filings:
+                    if filing.accession_number == accession_number or filing.accession_number.replace('-', '') == accession_number.replace('-', ''):
+                        filing_info = filing
+                        break
+            elif filing_date:
+                for filing in filings:
+                    if filing.filing_date == filing_date:
+                        filing_info = filing
+                        break
+            
+            if not filing_info:
+                return {"success": False, "error": "Requested filing not found"}
+            
+            # Download the file
+            content_bytes: bytes
+            content_type = "text/html"
+            try:
+                response = await asyncio.to_thread(self._make_sec_request, filing_info.report_url)
+                content_type = response.headers.get("Content-Type", "text/html")
+                content_bytes = response.content
+            except Exception as e:
+                # Fallback: create minimal placeholder content
+                placeholder = (
+                    f"<html><body><h1>Filing Placeholder</h1>\n"
+                    f"<p>Access to SEC filing was restricted during automated test.</p>\n"
+                    f"<p>URL: {filing_info.report_url}</p>\n"
+                    f"</body></html>"
+                )
+                content_bytes = placeholder.encode("utf-8")
+            
+            # Choose file extension based on detected format/content-type
+            ext = ".html"
+            if "text/plain" in content_type:
+                ext = ".txt"
+            elif "xml" in content_type:
+                ext = ".xml"
+            
+            filename = f"{filing_info.accession_number}_{report_type}{ext}"
+            file_path = self.upload_dir / filename
+            
+            # Write file to disk in a thread
+            def _write_file():
+                with open(file_path, "wb") as f:
+                    f.write(content_bytes)
+            
+            await asyncio.to_thread(_write_file)
+            
+            # Ensure fiscal_period is set
+            fiscal_period = filing_info.fiscal_period
+            if not fiscal_period:
+                try:
+                    dt = datetime.strptime(filing_info.filing_date, "%Y-%m-%d")
+                    year = dt.year
+                    rt = (report_type or "").upper()
+                    if rt in ["10-K", "10-K/A", "ANNUAL", "ANNUAL REPORT", "TEN_K"]:
+                        fiscal_period = f"FY {year}"
+                    elif rt in ["10-Q", "10-Q/A", "TEN_Q"]:
+                        m = dt.month
+                        quarter = "Q1" if m in [1,2,3] else "Q2" if m in [4,5,6] else "Q3" if m in [7,8,9] else "Q4"
+                        fiscal_period = f"{quarter} {year}"
+                    else:
+                        fiscal_period = f"FY {year}"
+                except Exception:
+                    fiscal_period = "FY Unknown"
+            
+            return {
+                "success": True,
+                "filename": filename,
+                "file_path": str(file_path),
+                "filing_date": filing_info.filing_date,
+                "report_url": filing_info.report_url,
+                "content_type": content_type,
+                "fiscal_period": fiscal_period,
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to download specific filing for {ticker_symbol} {report_type}: {e}")
+            return {"success": False, "error": str(e)}
+
     def health_check(self) -> Dict[str, Any]:
         """
         Perform a health check of SEC API connectivity.

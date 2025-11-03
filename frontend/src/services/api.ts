@@ -118,6 +118,19 @@ export interface DownloadReportRequest {
   ticker_symbol: string;
   report_type: string;
   year?: number;
+  accession_number?: string;
+  filing_date?: string;
+}
+
+export interface AvailableFiling {
+  accession_number: string;
+  filing_date: string;
+  fiscal_period: string | null;
+  report_type: string;
+  is_downloaded: boolean;
+  existing_report_id?: string | null;
+  file_format: string;
+  report_url?: string | null;
 }
 
 export interface ReportUploadResponse {
@@ -407,6 +420,19 @@ class ApiClient {
 
   async downloadReport(downloadData: DownloadReportRequest): Promise<ReportUploadResponse> {
     const response = await this.client.post<ReportUploadResponse>('/reports/download', downloadData);
+    return response.data;
+  }
+
+  async getAvailableFilings(
+    tickerSymbol: string,
+    reportType: string,
+    fiscalYear?: number
+  ): Promise<AvailableFiling[]> {
+    const params: any = { ticker_symbol: tickerSymbol, report_type: reportType };
+    if (fiscalYear) {
+      params.fiscal_year = fiscalYear;
+    }
+    const response = await this.client.get<AvailableFiling[]>('/reports/available-filings', { params });
     return response.data;
   }
 

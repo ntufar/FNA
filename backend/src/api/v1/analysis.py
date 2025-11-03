@@ -101,7 +101,7 @@ async def list_analyses(
     report_id: str = None,
     company_id: str = None,
     skip: int = 0,
-    limit: int = 50,
+    limit: int | None = None,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -125,8 +125,9 @@ async def list_analyses(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid company_id")
 
     q = q.order_by(NA.created_at.desc())
-    if limit:
-        q = q.offset(max(0, skip)).limit(max(1, min(limit, 200)))
+    # Apply pagination only when a limit is explicitly provided; otherwise return all
+    if limit is not None:
+        q = q.offset(max(0, skip)).limit(max(1, min(int(limit), 500)))
 
     rows: List[tuple[NA, FinancialReport]] = q.add_entity(FinancialReport).all()
     return [_to_response(na, fr) for (na, fr) in rows]

@@ -8,6 +8,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiClient, Company, FinancialReport, ReportUploadResponse } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import AdvancedDownloadModal from '../components/reports/AdvancedDownloadModal';
 
 const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const ReportsPage: React.FC = () => {
   const [isDownloading, setIsDownloading] = React.useState(false);
   const [downloadTicker, setDownloadTicker] = React.useState('');
   const [downloadType, setDownloadType] = React.useState<'10-K' | '10-Q' | '8-K' | 'Annual' | 'Other'>('10-K');
+  const [isAdvancedModalOpen, setIsAdvancedModalOpen] = React.useState(false);
 
   const companyById = React.useMemo(() => {
     const map: Record<string, Company> = {};
@@ -166,12 +168,35 @@ const ReportsPage: React.FC = () => {
               </select>
             </div>
 
+            <button
+              onClick={() => setIsAdvancedModalOpen(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            >
+              Advanced Download
+            </button>
             <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
               + Upload Report
             </button>
           </div>
         </div>
       </div>
+
+      {/* Advanced Download Modal */}
+      <AdvancedDownloadModal
+        isOpen={isAdvancedModalOpen}
+        onClose={() => setIsAdvancedModalOpen(false)}
+        companies={companies}
+        onDownloadComplete={async () => {
+          // Reload reports after successful download
+          try {
+            const params = selectedCompanyId ? { company_id: selectedCompanyId } : undefined;
+            const reportList = await apiClient.getReports(params);
+            setReports(Array.isArray(reportList) ? reportList : []);
+          } catch (error) {
+            console.error('Failed to reload reports:', error);
+          }
+        }}
+      />
 
       {/* Reports Table */}
       <div className="bg-white rounded-lg shadow">

@@ -487,6 +487,84 @@
           }
         },
         {
+          "name": "Get Available SEC Filings",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Available filings fetched', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is array', function () {",
+                  "    const jsonData = pm.response.json();",
+                  "    pm.expect(jsonData).to.be.an('array');",
+                  "});",
+                  "",
+                  "// Validate filing structure",
+                  "if (pm.response.code === 200) {",
+                  "    const filings = pm.response.json();",
+                  "    if (filings.length > 0) {",
+                  "        const filing = filings[0];",
+                  "        pm.test('Filing has required fields', function () {",
+                  "            pm.expect(filing).to.have.property('accession_number');",
+                  "            pm.expect(filing).to.have.property('filing_date');",
+                  "            pm.expect(filing).to.have.property('report_type');",
+                  "            pm.expect(filing).to.have.property('is_downloaded');",
+                  "        });",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/available-filings?ticker_symbol=AAPL&report_type=10-K&fiscal_year=2024",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "reports",
+                "available-filings"
+              ],
+              "query": [
+                {
+                  "key": "ticker_symbol",
+                  "value": "AAPL",
+                  "description": "Company ticker symbol"
+                },
+                {
+                  "key": "report_type",
+                  "value": "10-K",
+                  "description": "Report type (10-K, 10-Q, 8-K)"
+                },
+                {
+                  "key": "fiscal_year",
+                  "value": "2024",
+                  "description": "Optional fiscal year filter",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get list of available SEC filings for a company with download status checking. Shows which filings are already downloaded."
+          }
+        },
+        {
           "name": "Download from SEC.gov",
           "event": [
             {
@@ -535,7 +613,12 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"ticker_symbol\": \"NVDA\",\n  \"report_type\": \"10-K\",\n  \"fiscal_year\": 2024\n}"
+              "raw": "{\n  \"ticker_symbol\": \"NVDA\",\n  \"report_type\": \"10-K\",\n  \"fiscal_year\": 2024\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
             },
             "url": {
               "raw": "{{baseUrl}}/reports/download",
@@ -547,7 +630,7 @@
                 "download"
               ]
             },
-            "description": "Download and process latest financial report from SEC.gov"
+            "description": "Download and process latest financial report from SEC.gov. Optional parameters: accession_number or filing_date for specific filing selection. fiscal_year is deprecated when using specific filing selection."
           }
         },
         {

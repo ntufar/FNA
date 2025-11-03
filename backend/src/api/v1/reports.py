@@ -156,6 +156,8 @@ class SECDownloadRequest(BaseModel):
     ticker_symbol: str
     report_type: str = "10-K"
     fiscal_year: Optional[int] = None
+    accession_number: Optional[str] = None
+    filing_date: Optional[str] = None
     
     @validator('ticker_symbol')
     def validate_ticker_symbol(cls, v):
@@ -171,13 +173,25 @@ class SECDownloadRequest(BaseModel):
         return v
 
 
+class AvailableFilingResponse(BaseModel):
+    """Available SEC filing with download status."""
+    accession_number: str
+    filing_date: str
+    fiscal_period: Optional[str]
+    report_type: str
+    is_downloaded: bool
+    existing_report_id: Optional[str] = None
+    file_format: str
+    report_url: Optional[str] = None
+
+
 @router.get("/", response_model=List[ReportResponse])
 async def list_reports(
     company_id: str = None,
     report_type: str = None,
     status: str = None,
     skip: int = 0,
-    limit: int = 50,
+    limit: int | None = None,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -202,7 +216,10 @@ async def list_reports(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
 
-    reports = query.offset(skip).limit(limit).all()
+    # Apply pagination only if a limit is explicitly provided; otherwise return all
+    if limit is not None:
+        query = query.offset(max(0, skip)).limit(max(1, min(int(limit), 500)))
+    reports = query.all()
 
     results: List[ReportResponse] = []
     for r in reports:
@@ -317,6 +334,129 @@ async def upload_report(
         )
 
 
+@router.get("/available-filings", response_model=List[AvailableFilingResponse])
+async def get_available_filings(
+    ticker_symbol: str,
+    report_type: str,
+    fiscal_year: Optional[int] = None,
+    current_user: Dict[str, Any] = Depends(require_pro_tier),
+    db: Session = Depends(get_db)
+):
+    """Get available SEC filings for a company with download status checking.
+    
+    Requires Pro or Enterprise subscription.
+    Fetches recent filings from SEC and checks which ones are already downloaded.
+    """
+    from ...services.sec_downloader import SECDownloader, SECAPIError
+    
+    # Validate report type
+    if report_type not in ["10-K", "10-Q", "8-K"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid report type. Must be one of: 10-K, 10-Q, 8-K"
+        )
+    
+    # Validate ticker symbol
+    if not ticker_symbol or len(ticker_symbol) < 1 or len(ticker_symbol) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticker symbol must be 1-5 characters"
+        )
+    
+    ticker_symbol = ticker_symbol.upper()
+    
+    try:
+        # Initialize SEC downloader
+        sec_downloader = SECDownloader()
+        
+        # Fetch filings from SEC (up to 20)
+        sec_filings = sec_downloader.get_company_filings(
+            ticker=ticker_symbol,
+            form_types=[report_type],
+            limit=20
+        )
+        
+        # Check if filings exist in our database
+        company = db.query(Company).filter(
+            Company.ticker_symbol == ticker_symbol
+        ).first()
+        
+        downloaded_accessions = set()
+        downloaded_reports = {}
+        
+        if company:
+            # Query existing reports for this company and report type
+            existing_reports = db.query(FinancialReport).filter(
+                FinancialReport.company_id == company.id,
+                FinancialReport.report_type == ReportType(report_type)
+            ).all()
+            
+            for report in existing_reports:
+                if report.filing_date:
+                    # Normalize filing dates for comparison
+                    filing_date_str = report.filing_date.strftime("%Y-%m-%d")
+                    downloaded_accessions.add(filing_date_str)
+                    downloaded_reports[filing_date_str] = str(report.id)
+        
+        # Build response list
+        results = []
+        for filing in sec_filings:
+            # Apply fiscal year filter if provided
+            if fiscal_year and filing.filing_date:
+                try:
+                    filing_date_obj = datetime.strptime(filing.filing_date, "%Y-%m-%d").date()
+                    if filing_date_obj.year != fiscal_year:
+                        continue
+                except (ValueError, AttributeError):
+                    pass
+            
+            # Check if already downloaded
+            is_downloaded = filing.filing_date in downloaded_accessions
+            existing_report_id = downloaded_reports.get(filing.filing_date)
+            
+            # Infer fiscal period from filing date
+            fiscal_period = None
+            if filing.filing_date:
+                try:
+                    filing_date_obj = datetime.strptime(filing.filing_date, "%Y-%m-%d").date()
+                    year = filing_date_obj.year
+                    month = filing_date_obj.month
+                    
+                    if report_type in ["10-K", "Annual"]:
+                        fiscal_period = f"FY {year}"
+                    elif report_type == "10-Q":
+                        quarter = 'Q1' if month in [1,2,3] else 'Q2' if month in [4,5,6] else 'Q3' if month in [7,8,9] else 'Q4'
+                        fiscal_period = f"{quarter} {year}"
+                    else:
+                        fiscal_period = f"FY {year}"
+                except (ValueError, AttributeError):
+                    pass
+            
+            results.append(AvailableFilingResponse(
+                accession_number=filing.accession_number,
+                filing_date=filing.filing_date,
+                fiscal_period=fiscal_period,
+                report_type=filing.report_type,
+                is_downloaded=is_downloaded,
+                existing_report_id=existing_report_id,
+                file_format=filing.file_format,
+                report_url=filing.report_url
+            ))
+        
+        return results
+        
+    except SECAPIError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failed to fetch filings from SEC: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching available filings: {str(e)}"
+        )
+
+
 @router.post("/download", response_model=ReportUploadResponse)
 async def download_from_sec(
     download_request: SECDownloadRequest,
@@ -328,6 +468,7 @@ async def download_from_sec(
     
     Requires Pro or Enterprise subscription.
     Downloads latest filing for the specified ticker and report type.
+    If accession_number or filing_date is provided, downloads that specific filing instead.
     """
     from ...services.sec_downloader import SECDownloader
     
@@ -356,27 +497,35 @@ async def download_from_sec(
         # Initialize SEC downloader
         sec_downloader = SECDownloader()
         
-        # First, get filing info to check for duplicates before downloading
-        filing_info = sec_downloader.get_latest_filing(
-            download_request.ticker_symbol,
-            download_request.report_type
-        )
-        
-        if not filing_info:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No {download_request.report_type} filings found for {download_request.ticker_symbol}"
+        # Determine which filing to download
+        if download_request.accession_number or download_request.filing_date:
+            # Download specific filing
+            download_result = await sec_downloader.download_specific_filing(
+                ticker_symbol=download_request.ticker_symbol,
+                report_type=download_request.report_type,
+                accession_number=download_request.accession_number,
+                filing_date=download_request.filing_date
+            )
+        else:
+            # Download latest filing
+            download_result = await sec_downloader.download_latest_filing(
+                ticker_symbol=download_request.ticker_symbol,
+                report_type=download_request.report_type,
+                fiscal_year=download_request.fiscal_year
             )
         
-        # Check if this report already exists
-        # Match on: company_id, report_type, and filing_date
+        if not download_result['success']:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=download_result.get('error', 'Failed to download report from SEC.gov')
+            )
+        
+        # Check if report already exists before moving files
         filing_date = None
-        if filing_info.filing_date:
+        if download_result.get('filing_date'):
             try:
-                # SEC filing dates are in YYYY-MM-DD format
-                filing_date = datetime.strptime(filing_info.filing_date, "%Y-%m-%d").date()
+                filing_date = datetime.fromisoformat(download_result['filing_date']).date()
             except (ValueError, AttributeError):
-                # If parsing fails, log but continue with download
                 pass
         
         if filing_date:
@@ -387,7 +536,15 @@ async def download_from_sec(
             ).first()
             
             if existing_report:
-                # Report already exists, return existing report info
+                # Clean up downloaded file since it's a duplicate
+                try:
+                    downloaded_file_path = Path(download_result['file_path'])
+                    if downloaded_file_path.exists():
+                        downloaded_file_path.unlink()
+                except Exception:
+                    pass
+                
+                # Return existing report info
                 return ReportUploadResponse(
                     report_id=str(existing_report.id),
                     message=f"Report already exists for {download_request.ticker_symbol} ({download_request.report_type}) filed on {filing_date}",
@@ -395,19 +552,6 @@ async def download_from_sec(
                     file_path=str(Path(existing_report.file_path).relative_to(UPLOAD_DIR)) if existing_report.file_path else None,
                     estimated_processing_time=None
                 )
-        
-        # No duplicate found, proceed with download
-        download_result = await sec_downloader.download_latest_filing(
-            ticker_symbol=download_request.ticker_symbol,
-            report_type=download_request.report_type,
-            fiscal_year=download_request.fiscal_year
-        )
-        
-        if not download_result['success']:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=download_result.get('error', 'Failed to download report from SEC.gov')
-            )
         
         # Ensure upload directory exists
         ensure_upload_directory()

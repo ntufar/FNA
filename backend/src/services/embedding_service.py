@@ -83,12 +83,12 @@ class EmbeddingService:
             )
             
             self._is_loaded = True
-            print(f"✅ Embedding model loaded successfully on {device}")
+            print(f"SUCCESS: Embedding model loaded successfully on {device}")
             print(f"Embedding dimension: {self.settings.dimension}")
             return True
             
         except Exception as e:
-            print(f"❌ Error loading embedding model: {e}")
+            print(f"ERROR: Error loading embedding model: {e}")
             return False
     
     def encode_texts(

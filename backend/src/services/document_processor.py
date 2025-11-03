@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Union, Tuple
 from enum import Enum
+import numpy as np
 
 from ..core.config import get_settings
 from ..core.exceptions import (
@@ -426,6 +427,13 @@ class DocumentProcessor:
         try:
             logger.info(f"Generating embeddings for analysis {narrative_analysis.id}")
             
+            # Ensure embedding model is loaded
+            if not self.embedding_service.is_loaded():
+                logger.info("Loading embedding model...")
+                if not self.embedding_service.load_model():
+                    result.add_warning("Failed to load embedding model, skipping embeddings")
+                    return []
+            
             embeddings = []
             
             for section_name, text_content in text_sections.items():
@@ -434,8 +442,9 @@ class DocumentProcessor:
                         # Determine section type
                         section_type = self._map_section_type(section_name)
                         
-                        # Generate embedding
-                        embedding_vector = self.embedding_service.generate_embedding(text_content)
+                        # Generate embedding (encode_texts returns 2D array, get first row and convert to list)
+                        embedding_array = self.embedding_service.encode_texts(text_content)
+                        embedding_vector = embedding_array[0].tolist()
                         
                         # Create embedding record
                         embedding = NarrativeEmbedding.create_from_text(

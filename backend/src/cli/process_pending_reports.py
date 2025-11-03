@@ -104,7 +104,21 @@ def _process_reports(db, processor: DocumentProcessor, reports, force: bool) -> 
             if not file_path.exists():
                 logger.warning(f"File not found for report {report.id}: {file_path}")
 
-            processor.process_financial_report(report, include_embeddings=True, force_reprocess=force)
+            # Process the report
+            result = processor.process_financial_report(report, include_embeddings=True, force_reprocess=force)
+
+            # Save narrative analysis if created
+            if result.narrative_analysis:
+                db.add(result.narrative_analysis)
+                # Flush to get the ID before adding embeddings
+                db.flush()
+                # Update embeddings with the correct analysis_id (they were created with None)
+                for embedding in result.embeddings:
+                    embedding.analysis_id = result.narrative_analysis.id
+                    db.add(embedding)
+                logger.info(f"Added narrative analysis {result.narrative_analysis.id} to database")
+                if result.embeddings:
+                    logger.info(f"Added {len(result.embeddings)} embeddings to database")
 
             # Update model status is handled in processor; ensure updated_at
             report.updated_at = datetime.utcnow()

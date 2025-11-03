@@ -146,6 +146,67 @@ Health probes:
 
 Import the collection into Postman and select the appropriate environment. Update variables like `base_url`, tokens, and company IDs as needed.
 
+### Reports: Download Flow and Processing (CLI-only)
+
+- When you click "Download from SEC.gov" in the UI (Reports page), a report entry is created immediately with status **PENDING** and appears in the table.
+- The backend does NOT auto-start LLM processing on download or upload. Processing is performed only via the CLI tool below.
+- The "Re-process"/"Re-run Analysis" action resets status to **PENDING** only; run the CLI to process.
+
+API responses (subset):
+
+```json
+{
+  "report_id": "<uuid>",
+  "message": "...",
+  "processing_status": "PENDING",
+  "file_path": "<relative path>",
+  "estimated_processing_time": "..."
+}
+```
+
+Endpoints involved:
+- `POST v1/reports/download` → downloads report from SEC and creates a PENDING report
+- `POST v1/reports/upload` → uploads a file and creates a PENDING report
+- `GET  v1/reports/:id` → fetch report details
+- `POST v1/reports/:id/analyze` → resets status to PENDING (no background processing)
+
+Keep the Postman collection updated with these endpoints, request bodies, and example responses.
+
+### CLI: Process Reports (Pending/Failed/All)
+
+There is a command-line utility to process reports outside of the web background queue. Useful for batch reprocessing or server tasks.
+
+File: `backend/src/cli/process_pending_reports.py`
+
+Usage examples:
+
+```bash
+# Process PENDING (default)
+python -m backend.src.cli.process_pending_reports
+
+# Process FAILED only
+python -m backend.src.cli.process_pending_reports --status failed
+
+# Process PENDING and FAILED
+python -m backend.src.cli.process_pending_reports --status all
+
+# Limit to 5
+python -m backend.src.cli.process_pending_reports --limit 5
+
+# Filter by company ticker
+python -m backend.src.cli.process_pending_reports --ticker AAPL
+
+# Process a specific report ID
+python -m backend.src.cli.process_pending_reports --report-id <UUID>
+
+# Force reprocess even if COMPLETED
+python -m backend.src.cli.process_pending_reports --status all --force
+```
+
+Notes:
+- The CLI initializes the database and uses the same `DocumentProcessor` as the background tasks.
+- Status transitions follow the data model: PENDING → PROCESSING → COMPLETED/FAILED; FAILED can be re-queued to PENDING.
+
 ### Frontend
 
 - App root: `frontend/src`

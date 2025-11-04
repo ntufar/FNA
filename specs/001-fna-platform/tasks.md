@@ -167,20 +167,20 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T077 [P] Add comprehensive error handling and user-friendly error messages across all endpoints
-- [ ] T078 [P] Implement caching for expensive operations (model inference, embeddings)
-- [ ] T079 [P] Add performance monitoring and metrics collection
-- [ ] T080 [P] Create comprehensive API documentation in docs/api/
-- [ ] T081 [P] Add security hardening (input sanitization, SQL injection prevention)
+- [x] T077 [P] Add comprehensive error handling and user-friendly error messages across all endpoints
+- [x] T078 [P] Implement caching for expensive operations (model inference, embeddings)
+- [x] T079 [P] Add performance monitoring and metrics collection
+- [x] T080 [P] Create comprehensive API documentation in docs/api/
+- [x] T081 [P] Add security hardening (input sanitization, SQL injection prevention)
 - [ ] T082 [P] Implement cross-referenced financial metrics analysis per FR-020
-- [ ] T083 [P] Add data export functionality (Excel, CSV) for analysis results
-- [ ] T084 [P] Create admin interface for user and subscription management
-- [ ] T085 [P] Add system health checks and monitoring endpoints
-- [ ] T086 [P] Optimize database queries and add missing indexes
-- [ ] T087 [P] Create deployment scripts and production configuration
+- [x] T083 [P] Add data export functionality (Excel, CSV) for analysis results
+- [x] T084 [P] Create admin interface for user and subscription management
+- [x] T085 [P] Add system health checks and monitoring endpoints
+- [x] T086 [P] Optimize database queries and add missing indexes
+- [x] T087 [P] Create deployment scripts and production configuration
 - [ ] T088 Run quickstart.md validation to ensure setup process works
-- [ ] T089 [P] Implement accuracy validation system for FR-011 compliance (85% sentiment classification vs human experts)
-- [ ] T090 [P] Create data retention and lifecycle management system for FR-015 indefinite storage requirements
+- [x] T089 [P] Implement accuracy validation system for FR-011 compliance (85% sentiment classification vs human experts)
+- [x] T090 [P] Create data retention and lifecycle management system for FR-015 indefinite storage requirements
 - [ ] T091 Performance optimization and load testing validation
 - [ ] T092 Security audit and penetration testing
 

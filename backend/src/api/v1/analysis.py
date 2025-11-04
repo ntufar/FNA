@@ -1,7 +1,8 @@
 """Analysis endpoints for FNA backend API."""
 
 from typing import List, Dict, Any
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -327,3 +328,132 @@ async def get_sentiment_trends(
     }
     
     return mock_trends
+
+
+@router.get("/export/csv")
+async def export_analyses_csv(
+    company_id: str = None,
+    report_id: str = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Export analysis results to CSV format.
+    
+    Supports filtering by company_id or report_id.
+    """
+    from ...utils.export import export_analysis_to_csv, generate_export_filename
+    
+    try:
+        # Query analyses
+        q = db.query(NA).join(FinancialReport, FinancialReport.id == NA.report_id)
+        
+        if company_id:
+            import uuid as _uuid
+            q = q.filter(FinancialReport.company_id == _uuid.UUID(company_id))
+        
+        if report_id:
+            import uuid as _uuid
+            q = q.filter(NA.report_id == _uuid.UUID(report_id))
+        
+        analyses = q.all()
+        
+        # Convert to dictionaries
+        analysis_dicts = []
+        for analysis in analyses:
+            analysis_dicts.append({
+                "id": str(analysis.id),
+                "report_id": str(analysis.report_id),
+                "optimism_score": analysis.optimism_score,
+                "optimism_confidence": analysis.optimism_confidence,
+                "risk_score": analysis.risk_score,
+                "risk_confidence": analysis.risk_confidence,
+                "uncertainty_score": analysis.uncertainty_score,
+                "uncertainty_confidence": analysis.uncertainty_confidence,
+                "key_themes": ", ".join(analysis.key_themes) if analysis.key_themes else "",
+                "processing_time_seconds": analysis.processing_time_seconds,
+                "model_version": analysis.model_version,
+                "created_at": analysis.created_at.isoformat() if getattr(analysis, 'created_at', None) else "",
+            })
+        
+        # Export to CSV
+        csv_file = export_analysis_to_csv(analysis_dicts)
+        filename = generate_export_filename("analyses", "csv")
+        
+        return Response(
+            content=csv_file.read(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export analyses: {str(e)}"
+        )
+
+
+@router.get("/export/excel")
+async def export_analyses_excel(
+    company_id: str = None,
+    report_id: str = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Export analysis results to Excel format.
+    
+    Supports filtering by company_id or report_id.
+    """
+    from ...utils.export import export_analysis_to_excel, generate_export_filename
+    
+    try:
+        # Query analyses
+        q = db.query(NA).join(FinancialReport, FinancialReport.id == NA.report_id)
+        
+        if company_id:
+            import uuid as _uuid
+            q = q.filter(FinancialReport.company_id == _uuid.UUID(company_id))
+        
+        if report_id:
+            import uuid as _uuid
+            q = q.filter(NA.report_id == _uuid.UUID(report_id))
+        
+        analyses = q.all()
+        
+        # Convert to dictionaries
+        analysis_dicts = []
+        for analysis in analyses:
+            analysis_dicts.append({
+                "id": str(analysis.id),
+                "report_id": str(analysis.report_id),
+                "optimism_score": analysis.optimism_score,
+                "optimism_confidence": analysis.optimism_confidence,
+                "risk_score": analysis.risk_score,
+                "risk_confidence": analysis.risk_confidence,
+                "uncertainty_score": analysis.uncertainty_score,
+                "uncertainty_confidence": analysis.uncertainty_confidence,
+                "key_themes": ", ".join(analysis.key_themes) if analysis.key_themes else "",
+                "processing_time_seconds": analysis.processing_time_seconds,
+                "model_version": analysis.model_version,
+                "created_at": analysis.created_at.isoformat() if getattr(analysis, 'created_at', None) else "",
+            })
+        
+        # Export to Excel
+        excel_file = export_analysis_to_excel(analysis_dicts)
+        filename = generate_export_filename("analyses", "excel")
+        
+        return Response(
+            content=excel_file.read(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Excel export requires openpyxl. Install with: pip install openpyxl"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export analyses: {str(e)}"
+        )

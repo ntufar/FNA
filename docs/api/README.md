@@ -641,6 +641,209 @@ Configure alert preferences for a company.
 
 ---
 
+## Export Endpoints
+
+### Export Analyses to CSV
+
+Export analysis results to CSV format.
+
+**Endpoint:** `GET /analysis/export/csv`
+
+**Query Parameters:**
+- `company_id` (optional): Filter by company ID
+- `report_id` (optional): Filter by report ID
+
+**Example Request:**
+```bash
+GET /analysis/export/csv?company_id=550e8400-e29b-41d4-a716-446655440000
+Authorization: Bearer <token>
+```
+
+**Response:** CSV file download
+
+### Export Analyses to Excel
+
+Export analysis results to Excel format.
+
+**Endpoint:** `GET /analysis/export/excel`
+
+**Query Parameters:**
+- `company_id` (optional): Filter by company ID
+- `report_id` (optional): Filter by report ID
+
+**Example Request:**
+```bash
+GET /analysis/export/excel?company_id=550e8400-e29b-41d4-a716-446655440000
+Authorization: Bearer <token>
+```
+
+**Response:** Excel file (.xlsx) download
+
+**Note:** Requires `openpyxl` package to be installed.
+
+---
+
+## Admin Endpoints
+
+Admin endpoints require admin privileges. Contact support to request admin access.
+
+### List Users
+
+**Endpoint:** `GET /admin/users`
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `page_size` (optional): Records per page (default: 20, max: 100)
+- `subscription_tier` (optional): Filter by subscription tier
+- `is_active` (optional): Filter by active status
+
+**Example Response:**
+```json
+{
+  "users": [
+    {
+      "id": "110e8400-e29b-41d4-a716-446655440009",
+      "email": "user@example.com",
+      "subscription_tier": "Pro",
+      "is_active": true,
+      "created_at": "2024-01-15T10:30:00Z",
+      "last_login": "2024-01-20T14:30:00Z",
+      "full_name": "John Doe"
+    }
+  ],
+  "total": 150,
+  "page": 1,
+  "page_size": 20
+}
+```
+
+### Get User Details
+
+**Endpoint:** `GET /admin/users/{user_id}`
+
+### Update User
+
+**Endpoint:** `PATCH /admin/users/{user_id}`
+
+**Request Body:**
+```json
+{
+  "email": "newemail@example.com",
+  "subscription_tier": "Enterprise",
+  "is_active": true,
+  "full_name": "John Doe Updated"
+}
+```
+
+### Delete User (Soft Delete)
+
+**Endpoint:** `DELETE /admin/users/{user_id}`
+
+Soft deletes a user by setting `is_active=false`.
+
+### Get Subscription Statistics
+
+**Endpoint:** `GET /admin/stats/subscriptions`
+
+**Example Response:**
+```json
+{
+  "total_users": 150,
+  "basic_tier": 80,
+  "pro_tier": 50,
+  "enterprise_tier": 20,
+  "inactive_users": 5
+}
+```
+
+### List Companies (Admin)
+
+**Endpoint:** `GET /admin/companies`
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `page_size` (optional): Records per page (default: 20, max: 100)
+
+---
+
+## Health & Monitoring
+
+### Health Check
+
+**Endpoint:** `GET /health`
+
+Comprehensive health check including database and cache status.
+
+**Example Response:**
+```json
+{
+  "status": "healthy",
+  "version": "1.0.0",
+  "service": "fna-platform",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "database": {
+    "status": "healthy",
+    "connection": "ok"
+  },
+  "cache": {
+    "sentiment_cache": {
+      "size": 245,
+      "maxsize": 1000,
+      "type": "TTLCache"
+    },
+    "embedding_cache": {
+      "size": 1523,
+      "maxsize": 10000,
+      "type": "LRUCache"
+    },
+    "analysis_cache": {
+      "size": 89,
+      "maxsize": 500,
+      "type": "TTLCache"
+    }
+  },
+  "checks": {
+    "database": "ok",
+    "cache": "ok"
+  }
+}
+```
+
+### Readiness Check
+
+**Endpoint:** `GET /health/ready`
+
+Kubernetes readiness probe endpoint.
+
+### Liveness Check
+
+**Endpoint:** `GET /health/live`
+
+Kubernetes liveness probe endpoint.
+
+### Metrics (Prometheus)
+
+**Endpoint:** `GET /metrics`
+
+Returns Prometheus-compatible metrics in text format.
+
+**Example Response:**
+```
+# HELP fna_api_requests_total Total number of API requests
+# TYPE fna_api_requests_total counter
+fna_api_requests_total{endpoint="/companies",method="GET",status="200"} 1234
+fna_api_requests_total{endpoint="/reports/upload",method="POST",status="202"} 567
+...
+```
+
+### Metrics Summary
+
+**Endpoint:** `GET /metrics/summary`
+
+Human-readable metrics summary.
+
+---
+
 ## Webhooks
 
 Enterprise tier users can configure webhooks to receive notifications for significant narrative changes.

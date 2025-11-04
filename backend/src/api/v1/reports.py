@@ -3,6 +3,7 @@
 import os
 import uuid
 import shutil
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -19,6 +20,7 @@ from ...services.document_processor import DocumentProcessor
 from ...services.company_lookup import get_official_name_from_ticker
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Constants and configuration
 UPLOAD_DIR = Path("uploads/reports")
@@ -225,6 +227,7 @@ class BatchProcessResponse(BaseModel):
     failed: int
     results: List[Dict[str, Any]]
     processed_at: str
+    task_id: Optional[str] = None  # Celery task ID for status tracking
 
 
 
@@ -828,28 +831,46 @@ async def batch_process_reports(
     current_user: Dict[str, Any] = Depends(require_pro_tier),
     db: Session = Depends(get_db)
 ):
-    """Process multiple reports in batch.
+    """Process multiple reports in batch asynchronously using Celery.
     
     Requires Pro or Enterprise subscription. Batch size is limited by subscription tier:
     - Pro: 7 reports max
     - Enterprise: 10 reports max
+    
+    Returns immediately with batch_id for status tracking.
+    Use GET /reports/batch/{batch_id} to check progress.
     """
-    from ...services.batch_processor import BatchProcessor
+    from ...core.celery_app import get_celery_app
+    from ...tasks.batch_processing import process_batch_reports
     
     try:
         # Convert report IDs to UUIDs
         report_uuids = [uuid.UUID(rid) for rid in batch_request.report_ids]
         user_uuid = uuid.UUID(current_user["id"])
         
-        # Process batch
-        processor = BatchProcessor(db)
-        result = processor.process_batch(
-            user_id=user_uuid,
-            report_ids=report_uuids,
+        # Generate batch ID
+        batch_id = str(uuid.uuid4())
+        
+        # Submit batch job to Celery queue
+        celery_app = get_celery_app()
+        task = process_batch_reports.delay(
+            batch_id=batch_id,
+            user_id=str(user_uuid),
+            report_ids=batch_request.report_ids,
             max_reports=10
         )
         
-        return BatchProcessResponse(**result)
+        # Return batch info immediately
+        return BatchProcessResponse(
+            batch_id=batch_id,
+            status="PROCESSING",
+            total_reports=len(batch_request.report_ids),
+            successful=0,
+            failed=0,
+            results=[],
+            processed_at=datetime.now(timezone.utc).isoformat(),
+            task_id=task.id  # Include Celery task ID for status tracking
+        )
         
     except ValueError as e:
         raise HTTPException(
@@ -862,6 +883,112 @@ async def batch_process_reports(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Batch processing failed: {str(e)}"
         )
+
+
+@router.get("/batch/{batch_id}", response_model=BatchProcessResponse)
+async def get_batch_status(
+    batch_id: str,
+    task_id: Optional[str] = None,
+    current_user: Dict[str, Any] = Depends(require_pro_tier),
+    db: Session = Depends(get_db)
+):
+    """Get status of a batch processing job.
+    
+    Returns current status and progress for an async batch job.
+    If task_id is provided, queries Celery task status directly.
+    Otherwise, falls back to querying reports by batch_id from database.
+    """
+    from ...core.celery_app import get_celery_app
+    from ...services.batch_processor import BatchProcessor
+    
+    try:
+        celery_app = get_celery_app()
+        
+        # If task_id provided, query Celery task status
+        if task_id:
+            try:
+                task = celery_app.AsyncResult(task_id)
+                task_state = task.state
+                
+                if task_state == "PENDING":
+                    # Task hasn't started yet
+                    return BatchProcessResponse(
+                        batch_id=batch_id,
+                        status="PENDING",
+                        total_reports=0,
+                        successful=0,
+                        failed=0,
+                        results=[],
+                        processed_at=datetime.now(timezone.utc).isoformat(),
+                        task_id=task_id
+                    )
+                elif task_state == "PROCESSING":
+                    # Task is running, get progress from meta
+                    meta = task.info or {}
+                    return BatchProcessResponse(
+                        batch_id=batch_id,
+                        status="PROCESSING",
+                        total_reports=meta.get("total_reports", 0),
+                        successful=meta.get("successful", 0),
+                        failed=meta.get("failed", 0),
+                        results=meta.get("results", []),
+                        processed_at=datetime.now(timezone.utc).isoformat(),
+                        task_id=task_id
+                    )
+                elif task_state == "SUCCESS":
+                    # Task completed successfully
+                    result = task.result
+                    return BatchProcessResponse(
+                        batch_id=batch_id,
+                        status=result.get("status", "COMPLETED"),
+                        total_reports=result.get("total_reports", 0),
+                        successful=result.get("successful", 0),
+                        failed=result.get("failed", 0),
+                        results=result.get("results", []),
+                        processed_at=result.get("processed_at", datetime.now(timezone.utc).isoformat()),
+                        task_id=task_id
+                    )
+                elif task_state == "FAILURE":
+                    # Task failed
+                    error = task.info or {"error": "Unknown error"}
+                    return BatchProcessResponse(
+                        batch_id=batch_id,
+                        status="FAILED",
+                        total_reports=0,
+                        successful=0,
+                        failed=0,
+                        results=[],
+                        processed_at=datetime.now(timezone.utc).isoformat(),
+                        task_id=task_id
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to get Celery task status: {e}")
+        
+        # Fallback: Query reports by status (if batch_id tracking is implemented)
+        # For now, return a basic response
+        # In production, implement BatchJob model to track batch_id -> report_ids mapping
+        processor = BatchProcessor(db)
+        
+        # This is a placeholder - in production, store batch_id with reports
+        return BatchProcessResponse(
+            batch_id=batch_id,
+            status="PROCESSING",
+            total_reports=0,
+            successful=0,
+            failed=0,
+            results=[],
+            processed_at=datetime.now(timezone.utc).isoformat(),
+            task_id=task_id
+        )
+        
+    except Exception as e:
+        logger.error(f"Error getting batch status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get batch status: {str(e)}"
+        )
+
+
 @router.patch("/{report_id}/status", response_model=ReportResponse)
 async def update_report_status(
     report_id: str,

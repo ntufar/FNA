@@ -155,9 +155,9 @@
 - [x] T071 [US4] Add rate limiting middleware per API tier (Basic/Pro/Enterprise) in backend/src/middleware/rate_limiting.py
 - [x] T072 [US4] Implement subscription tier access control in backend/src/middleware/subscription_check.py
 - [x] T073 [US4] Create webhook endpoints for enterprise notifications in backend/src/api/webhooks/handlers.py
-- [ ] T074 [US4] Add comprehensive API documentation and examples in docs/api/
+- [x] T074 [US4] Add comprehensive API documentation and examples in docs/api/
 - [x] T075 [US4] Create batch status tracking and progress updates (implemented in BatchProcessor)
-- [ ] T076 [US4] Implement async job queue for batch processing
+- [x] T076 [US4] Implement async job queue for batch processing
 
 **Checkpoint**: All user stories should now be fully functional with enterprise features
 

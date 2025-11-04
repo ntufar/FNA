@@ -60,6 +60,74 @@ def generate_file_path(company_id: str, filename: str) -> Path:
     return company_dir / unique_filename
 
 
+async def process_batch_background(
+    batch_id: str,
+    user_id: str,
+    report_ids: List[str]
+):
+    """Background task to process a batch of reports.
+    
+    Uses PostgreSQL for job tracking - no external message broker required.
+    Updates batch_jobs table with progress and results.
+    """
+    from ...database.connection import get_db_session_context
+    from ...models.batch_job import BatchJob
+    from ...models.financial_report import FinancialReport, ProcessingStatus
+    from ...services.batch_processor import BatchProcessor, BatchStatus
+    
+    db = next(get_db_session_context())
+    try:
+        # Get batch job
+        batch_uuid = uuid.UUID(batch_id)
+        batch_job = db.query(BatchJob).filter(
+            BatchJob.batch_id == batch_uuid
+        ).first()
+        
+        if not batch_job:
+            logger.error(f"Batch job {batch_id} not found")
+            return
+        
+        # Update status to PROCESSING
+        batch_job.status = BatchStatus.PROCESSING.value
+        batch_job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        # Process batch using BatchProcessor
+        processor = BatchProcessor(db)
+        result = processor.process_batch(
+            user_id=uuid.UUID(user_id),
+            report_ids=[uuid.UUID(rid) for rid in report_ids],
+            max_reports=10
+        )
+        
+        # Update batch job with results
+        batch_job.status = result["status"]
+        batch_job.successful = result["successful"]
+        batch_job.failed = result["failed"]
+        batch_job.results = result["results"]
+        batch_job.processed_at = datetime.now(timezone.utc)
+        batch_job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        logger.info(f"Batch processing completed: {batch_id}, status={result['status']}")
+        
+    except Exception as e:
+        logger.error(f"Batch processing failed for {batch_id}: {e}", exc_info=True)
+        try:
+            # Update batch job status to FAILED
+            batch_job = db.query(BatchJob).filter(
+                BatchJob.batch_id == uuid.UUID(batch_id)
+            ).first()
+            if batch_job:
+                batch_job.status = BatchStatus.FAILED.value
+                batch_job.updated_at = datetime.now(timezone.utc)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
 async def process_report_background(report_id: str):
     """Background task to process uploaded report via local LLM (http://127.0.0.1:1234)."""
     from ...database.connection import get_db_session_context  # type: ignore
@@ -226,8 +294,8 @@ class BatchProcessResponse(BaseModel):
     successful: int
     failed: int
     results: List[Dict[str, Any]]
-    processed_at: str
-    task_id: Optional[str] = None  # Celery task ID for status tracking
+    processed_at: Optional[str] = None
+    task_id: Optional[str] = None  # No longer used (kept for API compatibility)
 
 
 
@@ -828,10 +896,11 @@ async def reanalyze_report(
 @router.post("/batch", response_model=BatchProcessResponse)
 async def batch_process_reports(
     batch_request: BatchProcessRequest,
+    background_tasks: BackgroundTasks,
     current_user: Dict[str, Any] = Depends(require_pro_tier),
     db: Session = Depends(get_db)
 ):
-    """Process multiple reports in batch asynchronously using Celery.
+    """Process multiple reports in batch asynchronously using PostgreSQL-backed queue.
     
     Requires Pro or Enterprise subscription. Batch size is limited by subscription tier:
     - Pro: 7 reports max
@@ -839,46 +908,84 @@ async def batch_process_reports(
     
     Returns immediately with batch_id for status tracking.
     Use GET /reports/batch/{batch_id} to check progress.
+    
+    Uses FastAPI BackgroundTasks with PostgreSQL for job tracking - no external message broker required.
     """
-    from ...core.celery_app import get_celery_app
-    from ...tasks.batch_processing import process_batch_reports
+    from ...models.batch_job import BatchJob
+    from ...models.user import User
+    from ...services.batch_processor import BatchStatus
     
     try:
         # Convert report IDs to UUIDs
         report_uuids = [uuid.UUID(rid) for rid in batch_request.report_ids]
         user_uuid = uuid.UUID(current_user["id"])
         
-        # Generate batch ID
-        batch_id = str(uuid.uuid4())
+        # Get user to check subscription tier limits
+        user = db.query(User).filter(User.id == user_uuid).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
         
-        # Submit batch job to Celery queue
-        celery_app = get_celery_app()
-        task = process_batch_reports.delay(
+        # Check user's batch limit
+        user_batch_limit = user.get_batch_limit()
+        if len(batch_request.report_ids) > user_batch_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Batch size ({len(batch_request.report_ids)}) exceeds your subscription limit ({user_batch_limit})"
+            )
+        
+        # Generate batch ID
+        batch_id = uuid.uuid4()
+        
+        # Create batch job record in database
+        batch_job = BatchJob(
+            id=uuid.uuid4(),
             batch_id=batch_id,
-            user_id=str(user_uuid),
+            user_id=user_uuid,
+            status=BatchStatus.PENDING.value,
+            total_reports=len(batch_request.report_ids),
+            successful=0,
+            failed=0,
             report_ids=batch_request.report_ids,
-            max_reports=10
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(batch_job)
+        db.commit()
+        db.refresh(batch_job)
+        
+        # Add background task to process batch
+        background_tasks.add_task(
+            process_batch_background,
+            batch_id=str(batch_id),
+            user_id=str(user_uuid),
+            report_ids=batch_request.report_ids
         )
         
         # Return batch info immediately
         return BatchProcessResponse(
-            batch_id=batch_id,
-            status="PROCESSING",
+            batch_id=str(batch_id),
+            status=BatchStatus.PENDING.value,
             total_reports=len(batch_request.report_ids),
             successful=0,
             failed=0,
             results=[],
-            processed_at=datetime.now(timezone.utc).isoformat(),
-            task_id=task.id  # Include Celery task ID for status tracking
+            processed_at=None
         )
         
+    except HTTPException:
+        raise
     except ValueError as e:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
     except Exception as e:
         db.rollback()
+        logger.error(f"Batch processing initialization failed: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Batch processing failed: {str(e)}"
@@ -888,99 +995,49 @@ async def batch_process_reports(
 @router.get("/batch/{batch_id}", response_model=BatchProcessResponse)
 async def get_batch_status(
     batch_id: str,
-    task_id: Optional[str] = None,
+    task_id: Optional[str] = None,  # Deprecated - kept for API compatibility
     current_user: Dict[str, Any] = Depends(require_pro_tier),
     db: Session = Depends(get_db)
 ):
-    """Get status of a batch processing job.
+    """Get status of a batch processing job from PostgreSQL.
     
-    Returns current status and progress for an async batch job.
-    If task_id is provided, queries Celery task status directly.
-    Otherwise, falls back to querying reports by batch_id from database.
+    Returns current status and progress for a batch job.
+    Queries the batch_jobs table to get real-time status.
     """
-    from ...core.celery_app import get_celery_app
-    from ...services.batch_processor import BatchProcessor
+    from ...models.batch_job import BatchJob
     
     try:
-        celery_app = get_celery_app()
+        # Query batch job from database
+        batch_uuid = uuid.UUID(batch_id)
+        batch_job = db.query(BatchJob).filter(
+            BatchJob.batch_id == batch_uuid,
+            BatchJob.user_id == uuid.UUID(current_user["id"])  # Ensure user can only see their own jobs
+        ).first()
         
-        # If task_id provided, query Celery task status
-        if task_id:
-            try:
-                task = celery_app.AsyncResult(task_id)
-                task_state = task.state
-                
-                if task_state == "PENDING":
-                    # Task hasn't started yet
-                    return BatchProcessResponse(
-                        batch_id=batch_id,
-                        status="PENDING",
-                        total_reports=0,
-                        successful=0,
-                        failed=0,
-                        results=[],
-                        processed_at=datetime.now(timezone.utc).isoformat(),
-                        task_id=task_id
-                    )
-                elif task_state == "PROCESSING":
-                    # Task is running, get progress from meta
-                    meta = task.info or {}
-                    return BatchProcessResponse(
-                        batch_id=batch_id,
-                        status="PROCESSING",
-                        total_reports=meta.get("total_reports", 0),
-                        successful=meta.get("successful", 0),
-                        failed=meta.get("failed", 0),
-                        results=meta.get("results", []),
-                        processed_at=datetime.now(timezone.utc).isoformat(),
-                        task_id=task_id
-                    )
-                elif task_state == "SUCCESS":
-                    # Task completed successfully
-                    result = task.result
-                    return BatchProcessResponse(
-                        batch_id=batch_id,
-                        status=result.get("status", "COMPLETED"),
-                        total_reports=result.get("total_reports", 0),
-                        successful=result.get("successful", 0),
-                        failed=result.get("failed", 0),
-                        results=result.get("results", []),
-                        processed_at=result.get("processed_at", datetime.now(timezone.utc).isoformat()),
-                        task_id=task_id
-                    )
-                elif task_state == "FAILURE":
-                    # Task failed
-                    error = task.info or {"error": "Unknown error"}
-                    return BatchProcessResponse(
-                        batch_id=batch_id,
-                        status="FAILED",
-                        total_reports=0,
-                        successful=0,
-                        failed=0,
-                        results=[],
-                        processed_at=datetime.now(timezone.utc).isoformat(),
-                        task_id=task_id
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to get Celery task status: {e}")
+        if not batch_job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Batch job {batch_id} not found"
+            )
         
-        # Fallback: Query reports by status (if batch_id tracking is implemented)
-        # For now, return a basic response
-        # In production, implement BatchJob model to track batch_id -> report_ids mapping
-        processor = BatchProcessor(db)
-        
-        # This is a placeholder - in production, store batch_id with reports
+        # Convert to response
         return BatchProcessResponse(
-            batch_id=batch_id,
-            status="PROCESSING",
-            total_reports=0,
-            successful=0,
-            failed=0,
-            results=[],
-            processed_at=datetime.now(timezone.utc).isoformat(),
-            task_id=task_id
+            batch_id=str(batch_job.batch_id),
+            status=batch_job.status,
+            total_reports=batch_job.total_reports,
+            successful=batch_job.successful,
+            failed=batch_job.failed,
+            results=batch_job.results or [],
+            processed_at=batch_job.processed_at.isoformat() if batch_job.processed_at else None
         )
         
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid batch ID format: {str(e)}"
+        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error getting batch status: {e}", exc_info=True)
         raise HTTPException(

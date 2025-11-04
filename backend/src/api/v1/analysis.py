@@ -9,13 +9,15 @@ from ...core.security import get_current_user, require_enterprise_tier
 from ...database.connection import get_db
 from ...services.delta_analyzer import DeltaAnalyzer
 from ...models.narrative_delta import NarrativeDelta
+from ...models.narrative_analysis import NarrativeAnalysis as NA
+from ...models.financial_report import FinancialReport
 
 router = APIRouter()
 
 
 # Request/Response models
 class AnalysisResponse(BaseModel):
-    """Analysis results response model."""
+    """Analysis results response model (aligned with frontend)."""
     id: str
     report_id: str
     optimism_score: float
@@ -24,9 +26,15 @@ class AnalysisResponse(BaseModel):
     risk_confidence: float
     uncertainty_score: float
     uncertainty_confidence: float
-    overall_sentiment_score: float
-    key_insights: List[str]
+    key_themes: List[Any] = []
+    risk_indicators: List[Any] = []
+    narrative_sections: Dict[str, Any] = {}
+    financial_metrics: Dict[str, Any] | None = None
+    processing_time_seconds: int | None = None
+    model_version: str
     created_at: str
+    # Optional embedded report summary for labeling in UI
+    report: Dict[str, Any] | None = None
 
 
 class ComparisonRequest(BaseModel):
@@ -55,99 +63,95 @@ class SimilaritySearchRequest(BaseModel):
     limit: int = 10
 
 
+def _to_response(analysis: NA, report: FinancialReport | None) -> AnalysisResponse:
+    report_dict = None
+    if report:
+        report_dict = {
+            "id": str(report.id),
+            "company_id": str(report.company_id),
+            "company_name": report.company.company_name if report.company else None,
+            "ticker_symbol": report.company.ticker_symbol if report.company else None,
+            "report_type": report.report_type.value if report.report_type else None,
+            "fiscal_period": report.fiscal_period,
+            "filing_date": report.filing_date.isoformat() if report.filing_date else None,
+            "processing_status": report.processing_status.value if report.processing_status else None,
+        }
+    return AnalysisResponse(
+        id=str(analysis.id),
+        report_id=str(analysis.report_id),
+        optimism_score=analysis.optimism_score,
+        optimism_confidence=analysis.optimism_confidence,
+        risk_score=analysis.risk_score,
+        risk_confidence=analysis.risk_confidence,
+        uncertainty_score=analysis.uncertainty_score,
+        uncertainty_confidence=analysis.uncertainty_confidence,
+        key_themes=analysis.key_themes or [],
+        risk_indicators=analysis.risk_indicators or [],
+        narrative_sections=analysis.narrative_sections or {},
+        financial_metrics=analysis.financial_metrics,
+        processing_time_seconds=analysis.processing_time_seconds,
+        model_version=analysis.model_version,
+        created_at=analysis.created_at.isoformat() if getattr(analysis, 'created_at', None) else "",
+        report=report_dict,
+    )
+
+
 @router.get("/", response_model=List[AnalysisResponse])
 async def list_analyses(
     report_id: str = None,
     company_id: str = None,
     skip: int = 0,
-    limit: int = 50,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    limit: int | None = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """List narrative analyses with optional filtering.
-    
-    TODO: Replace with database query.
-    """
-    # Mock analyses for development
-    mock_analyses = [
-        {
-            "id": "analysis-1",
-            "report_id": "report-1",
-            "optimism_score": 0.72,
-            "optimism_confidence": 0.85,
-            "risk_score": 0.28,
-            "risk_confidence": 0.80,
-            "uncertainty_score": 0.31,
-            "uncertainty_confidence": 0.77,
-            "overall_sentiment_score": 0.71,
-            "key_insights": [
-                "Strong financial performance emphasized",
-                "Confident outlook for next quarter",
-                "Minor concerns about market volatility"
-            ],
-            "created_at": "2025-10-29T02:00:00"
-        },
-        {
-            "id": "analysis-2", 
-            "report_id": "report-2",
-            "optimism_score": 0.58,
-            "optimism_confidence": 0.82,
-            "risk_score": 0.45,
-            "risk_confidence": 0.88,
-            "uncertainty_score": 0.52,
-            "uncertainty_confidence": 0.74,
-            "overall_sentiment_score": 0.54,
-            "key_insights": [
-                "Cautious tone regarding economic conditions",
-                "Supply chain challenges mentioned",
-                "Focus on cost management strategies"
-            ],
-            "created_at": "2025-10-29T03:00:00"
-        }
-    ]
-    
-    # Apply filtering
-    filtered_analyses = mock_analyses
+    """List narrative analyses with optional filtering (database-backed)."""
+    q = db.query(NA)
+    # Join to report when we need company filter or to embed report summary
+    q = q.join(FinancialReport, FinancialReport.id == NA.report_id)
+
     if report_id:
-        filtered_analyses = [a for a in filtered_analyses if a["report_id"] == report_id]
-    
-    return filtered_analyses[skip:skip + limit]
+        try:
+            import uuid as _uuid
+            q = q.filter(NA.report_id == _uuid.UUID(report_id))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report_id")
+
+    if company_id:
+        try:
+            import uuid as _uuid
+            q = q.filter(FinancialReport.company_id == _uuid.UUID(company_id))
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid company_id")
+
+    q = q.order_by(NA.created_at.desc())
+    # Apply pagination only when a limit is explicitly provided; otherwise return all
+    if limit is not None:
+        q = q.offset(max(0, skip)).limit(max(1, min(int(limit), 500)))
+
+    rows: List[tuple[NA, FinancialReport]] = q.add_entity(FinancialReport).all()
+    return [_to_response(na, fr) for (na, fr) in rows]
 
 
 @router.get("/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(
     analysis_id: str,
-    current_user: Dict[str, Any] = Depends(get_current_user)
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Get detailed analysis results for a specific analysis.
-    
-    TODO: Replace with database query.
-    """
-    # Mock analysis lookup
-    if not analysis_id.startswith("analysis-"):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Analysis not found"
-        )
-    
-    mock_analysis = {
-        "id": analysis_id,
-        "report_id": "report-1",
-        "optimism_score": 0.72,
-        "optimism_confidence": 0.85,
-        "risk_score": 0.28,
-        "risk_confidence": 0.80,
-        "uncertainty_score": 0.31,
-        "uncertainty_confidence": 0.77,
-        "overall_sentiment_score": 0.71,
-        "key_insights": [
-            "Strong financial performance emphasized",
-            "Confident outlook for next quarter", 
-            "Minor concerns about market volatility"
-        ],
-        "created_at": "2025-10-29T02:00:00"
-    }
-    
-    return AnalysisResponse(**mock_analysis)
+    """Get detailed analysis results for a specific analysis (database-backed)."""
+    try:
+        import uuid as _uuid
+        analysis_uuid = _uuid.UUID(analysis_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid analysis ID format")
+
+    na: NA | None = db.query(NA).filter(NA.id == analysis_uuid).first()
+    if not na:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Analysis not found")
+
+    report: FinancialReport | None = db.query(FinancialReport).filter(FinancialReport.id == na.report_id).first()
+    return _to_response(na, report)
 
 
 @router.post("/compare", response_model=ComparisonResponse)

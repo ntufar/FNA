@@ -174,6 +174,77 @@ paths:
         400:
           $ref: '#/components/responses/BadRequest'
 
+  /reports/available-filings:
+    get:
+      tags: [Reports]
+      summary: Get available SEC filings for a company with download status
+      parameters:
+        - name: ticker_symbol
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: '^[A-Z]{1,5}$'
+          description: Company ticker symbol
+        - name: report_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [10-K, 10-Q, 8-K]
+          description: Report type to search for
+        - name: fiscal_year
+          in: query
+          required: false
+          schema:
+            type: integer
+          description: Optional fiscal year filter
+      responses:
+        200:
+          description: List of available filings with download status
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    accession_number:
+                      type: string
+                      description: SEC accession number
+                    filing_date:
+                      type: string
+                      format: date
+                      description: Filing date
+                    fiscal_period:
+                      type: string
+                      nullable: true
+                      description: Fiscal period (e.g., FY 2024, Q1 2024)
+                    report_type:
+                      type: string
+                      description: Report type
+                    is_downloaded:
+                      type: boolean
+                      description: Whether report already exists in database
+                    existing_report_id:
+                      type: string
+                      nullable: true
+                      format: uuid
+                      description: ID of existing report if downloaded
+                    file_format:
+                      type: string
+                      description: File format
+                    report_url:
+                      type: string
+                      nullable: true
+                      description: URL to SEC filing
+        400:
+          $ref: '#/components/responses/BadRequest'
+        404:
+          description: No filings found for ticker symbol
+        401:
+          $ref: '#/components/responses/Unauthorized'
+
   /reports/download:
     post:
       tags: [Reports]
@@ -196,6 +267,13 @@ paths:
                 fiscal_year:
                   type: integer
                   example: 2024
+                accession_number:
+                  type: string
+                  description: Optional accession number for specific filing
+                filing_date:
+                  type: string
+                  format: date
+                  description: Optional filing date for specific filing (YYYY-MM-DD)
       responses:
         202:
           description: Download initiated and processing started
@@ -205,6 +283,8 @@ paths:
                 $ref: '#/components/schemas/FinancialReport'
         404:
           description: Report not found on SEC.gov
+        400:
+          $ref: '#/components/responses/BadRequest'
 
   /reports/batch:
     post:

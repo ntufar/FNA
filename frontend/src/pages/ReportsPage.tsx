@@ -6,8 +6,9 @@
 
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { apiClient, Company, FinancialReport } from '../services/api';
+import { apiClient, Company, FinancialReport, ReportUploadResponse } from '../services/api';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import AdvancedDownloadModal from '../components/reports/AdvancedDownloadModal';
 
 const ReportsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -18,6 +19,7 @@ const ReportsPage: React.FC = () => {
   const [isDownloading, setIsDownloading] = React.useState(false);
   const [downloadTicker, setDownloadTicker] = React.useState('');
   const [downloadType, setDownloadType] = React.useState<'10-K' | '10-Q' | '8-K' | 'Annual' | 'Other'>('10-K');
+  const [isAdvancedModalOpen, setIsAdvancedModalOpen] = React.useState(false);
 
   const companyById = React.useMemo(() => {
     const map: Record<string, Company> = {};
@@ -29,14 +31,9 @@ const ReportsPage: React.FC = () => {
     let mounted = true;
     async function load() {
       try {
-        const [companyList, reportList] = await Promise.all([
-          apiClient.getCompanies(),
-          apiClient.getReports(),
-        ]);
+        const companyList = await apiClient.getCompanies();
         if (!mounted) return;
         setCompanies(companyList);
-        setReports(Array.isArray(reportList) ? reportList : []);
-        if (companyList[0]) setSelectedCompanyId(companyList[0].id);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -45,13 +42,55 @@ const ReportsPage: React.FC = () => {
     return () => { mounted = false; };
   }, []);
 
+  // Load reports when company filter changes
+  React.useEffect(() => {
+    let mounted = true;
+    async function loadReports() {
+      try {
+        setIsLoading(true);
+        const params = selectedCompanyId ? { company_id: selectedCompanyId } : undefined;
+        const reportList = await apiClient.getReports(params);
+        if (!mounted) return;
+        setReports(Array.isArray(reportList) ? reportList : []);
+      } catch (error) {
+        console.error('Failed to load reports:', error);
+        if (!mounted) return;
+        setReports([]);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    }
+    loadReports();
+    return () => { mounted = false; };
+  }, [selectedCompanyId]);
+
   async function handleDownloadFromSEC() {
     if (!downloadTicker) return;
     setIsDownloading(true);
     try {
-      const fr = await apiClient.downloadReport({ ticker_symbol: downloadTicker.toUpperCase(), report_type: downloadType });
-      // Prepend new report if returned
-      if (fr) setReports((prev) => [fr, ...prev]);
+      const res: ReportUploadResponse = await apiClient.downloadReport({ ticker_symbol: downloadTicker.toUpperCase(), report_type: downloadType });
+      // Optimistically add a pending placeholder, then replace with fetched report
+      const placeholder: FinancialReport = {
+        id: res.report_id,
+        company_id: '',
+        report_type: downloadType,
+        fiscal_period: '',
+        filing_date: '',
+        file_path: res.file_path || '',
+        file_format: 'HTML',
+        file_size_bytes: 0,
+        download_source: 'SEC_AUTO',
+        processing_status: 'PENDING',
+        created_at: new Date().toISOString(),
+      } as any;
+      setReports((prev) => [placeholder, ...prev]);
+      // Fetch full report details
+      try {
+        const full = await apiClient.getReport(res.report_id);
+        setReports((prev) => [full, ...prev.filter((r) => r.id !== res.report_id)]);
+      } catch (_) {
+        // Keep placeholder if fetch fails
+      }
       setDownloadTicker('');
     } finally {
       setIsDownloading(false);
@@ -67,6 +106,18 @@ const ReportsPage: React.FC = () => {
     } catch (e) {
       // On error, revert status
       setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'FAILED' } : r)));
+    }
+  }
+
+  async function handleMarkPending(reportId: string) {
+    // Optimistically set status to PENDING
+    setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'PENDING' } : r)));
+    try {
+      const updated = await apiClient.setReportStatus(reportId, 'PENDING');
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, ...updated } as any : r)));
+    } catch (e) {
+      // On error, revert to COMPLETED since action was initiated from that state
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'COMPLETED' } : r)));
     }
   }
 
@@ -116,24 +167,48 @@ const ReportsPage: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm text-gray-700">Company</label>
+              <label className="text-sm text-gray-700">Filter by Company</label>
               <select
                 className="border border-gray-300 rounded px-2 py-1 text-sm"
                 value={selectedCompanyId}
                 onChange={(e) => setSelectedCompanyId(e.target.value)}
               >
+                <option value="">All Companies</option>
                 {companies.map((c) => (
                   <option key={c.id} value={c.id}>{c.company_name} ({c.ticker_symbol})</option>
                 ))}
               </select>
             </div>
 
+            <button
+              onClick={() => setIsAdvancedModalOpen(true)}
+              className="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+            >
+              Advanced Download
+            </button>
             <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
               + Upload Report
             </button>
           </div>
         </div>
       </div>
+
+      {/* Advanced Download Modal */}
+      <AdvancedDownloadModal
+        isOpen={isAdvancedModalOpen}
+        onClose={() => setIsAdvancedModalOpen(false)}
+        companies={companies}
+        onDownloadComplete={async () => {
+          // Reload reports after successful download
+          try {
+            const params = selectedCompanyId ? { company_id: selectedCompanyId } : undefined;
+            const reportList = await apiClient.getReports(params);
+            setReports(Array.isArray(reportList) ? reportList : []);
+          } catch (error) {
+            console.error('Failed to reload reports:', error);
+          }
+        }}
+      />
 
       {/* Reports Table */}
       <div className="bg-white rounded-lg shadow">
@@ -172,6 +247,15 @@ const ReportsPage: React.FC = () => {
                       >
                         Analyze
                       </button>
+                      {r.processing_status === 'COMPLETED' && (
+                        <button
+                          onClick={() => handleMarkPending(r.id)}
+                          className="text-amber-600 hover:text-amber-800"
+                          title="Mark as Pending"
+                        >
+                          Mark as Pending
+                        </button>
+                      )}
                       {r.processing_status === 'FAILED' && (
                         <button
                           onClick={() => handleReanalyze(r.id)}

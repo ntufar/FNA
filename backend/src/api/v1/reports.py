@@ -156,6 +156,8 @@ class SECDownloadRequest(BaseModel):
     ticker_symbol: str
     report_type: str = "10-K"
     fiscal_year: Optional[int] = None
+    accession_number: Optional[str] = None
+    filing_date: Optional[str] = None
     
     @validator('ticker_symbol')
     def validate_ticker_symbol(cls, v):
@@ -171,13 +173,37 @@ class SECDownloadRequest(BaseModel):
         return v
 
 
+class AvailableFilingResponse(BaseModel):
+    """Available SEC filing with download status."""
+    accession_number: str
+    filing_date: str
+    fiscal_period: Optional[str]
+    report_type: str
+    is_downloaded: bool
+    existing_report_id: Optional[str] = None
+    file_format: str
+    report_url: Optional[str] = None
+class UpdateReportStatusRequest(BaseModel):
+    """Request model to update the processing status of a report."""
+    status: str
+
+    @validator('status')
+    def validate_status(cls, v):
+        try:
+            ProcessingStatus(v)
+            return v
+        except Exception:
+            raise ValueError(f"Invalid status. Must be one of: {', '.join([s.value for s in ProcessingStatus])}")
+
+
+
 @router.get("/", response_model=List[ReportResponse])
 async def list_reports(
     company_id: str = None,
     report_type: str = None,
     status: str = None,
     skip: int = 0,
-    limit: int = 50,
+    limit: int | None = None,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -202,7 +228,10 @@ async def list_reports(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid status")
 
-    reports = query.offset(skip).limit(limit).all()
+    # Apply pagination only if a limit is explicitly provided; otherwise return all
+    if limit is not None:
+        query = query.offset(max(0, skip)).limit(max(1, min(int(limit), 500)))
+    reports = query.all()
 
     results: List[ReportResponse] = []
     for r in reports:
@@ -227,7 +256,6 @@ async def list_reports(
 
 @router.post("/upload", response_model=ReportUploadResponse)
 async def upload_report(
-    background_tasks: BackgroundTasks,
     company_id: str = Form(...),
     report_type: str = Form("Other"),
     fiscal_period: Optional[str] = Form(None),
@@ -298,9 +326,6 @@ async def upload_report(
         db.commit()
         db.refresh(new_report)
         
-        # Queue background processing
-        background_tasks.add_task(process_report_background, str(new_report.id))
-        
         return ReportUploadResponse(
             report_id=str(new_report.id),
             message=f"File '{file.filename}' uploaded successfully and queued for processing",
@@ -321,6 +346,129 @@ async def upload_report(
         )
 
 
+@router.get("/available-filings", response_model=List[AvailableFilingResponse])
+async def get_available_filings(
+    ticker_symbol: str,
+    report_type: str,
+    fiscal_year: Optional[int] = None,
+    current_user: Dict[str, Any] = Depends(require_pro_tier),
+    db: Session = Depends(get_db)
+):
+    """Get available SEC filings for a company with download status checking.
+    
+    Requires Pro or Enterprise subscription.
+    Fetches recent filings from SEC and checks which ones are already downloaded.
+    """
+    from ...services.sec_downloader import SECDownloader, SECAPIError
+    
+    # Validate report type
+    if report_type not in ["10-K", "10-Q", "8-K"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid report type. Must be one of: 10-K, 10-Q, 8-K"
+        )
+    
+    # Validate ticker symbol
+    if not ticker_symbol or len(ticker_symbol) < 1 or len(ticker_symbol) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ticker symbol must be 1-5 characters"
+        )
+    
+    ticker_symbol = ticker_symbol.upper()
+    
+    try:
+        # Initialize SEC downloader
+        sec_downloader = SECDownloader()
+        
+        # Fetch filings from SEC (up to 20)
+        sec_filings = sec_downloader.get_company_filings(
+            ticker=ticker_symbol,
+            form_types=[report_type],
+            limit=20
+        )
+        
+        # Check if filings exist in our database
+        company = db.query(Company).filter(
+            Company.ticker_symbol == ticker_symbol
+        ).first()
+        
+        downloaded_accessions = set()
+        downloaded_reports = {}
+        
+        if company:
+            # Query existing reports for this company and report type
+            existing_reports = db.query(FinancialReport).filter(
+                FinancialReport.company_id == company.id,
+                FinancialReport.report_type == ReportType(report_type)
+            ).all()
+            
+            for report in existing_reports:
+                if report.filing_date:
+                    # Normalize filing dates for comparison
+                    filing_date_str = report.filing_date.strftime("%Y-%m-%d")
+                    downloaded_accessions.add(filing_date_str)
+                    downloaded_reports[filing_date_str] = str(report.id)
+        
+        # Build response list
+        results = []
+        for filing in sec_filings:
+            # Apply fiscal year filter if provided
+            if fiscal_year and filing.filing_date:
+                try:
+                    filing_date_obj = datetime.strptime(filing.filing_date, "%Y-%m-%d").date()
+                    if filing_date_obj.year != fiscal_year:
+                        continue
+                except (ValueError, AttributeError):
+                    pass
+            
+            # Check if already downloaded
+            is_downloaded = filing.filing_date in downloaded_accessions
+            existing_report_id = downloaded_reports.get(filing.filing_date)
+            
+            # Infer fiscal period from filing date
+            fiscal_period = None
+            if filing.filing_date:
+                try:
+                    filing_date_obj = datetime.strptime(filing.filing_date, "%Y-%m-%d").date()
+                    year = filing_date_obj.year
+                    month = filing_date_obj.month
+                    
+                    if report_type in ["10-K", "Annual"]:
+                        fiscal_period = f"FY {year}"
+                    elif report_type == "10-Q":
+                        quarter = 'Q1' if month in [1,2,3] else 'Q2' if month in [4,5,6] else 'Q3' if month in [7,8,9] else 'Q4'
+                        fiscal_period = f"{quarter} {year}"
+                    else:
+                        fiscal_period = f"FY {year}"
+                except (ValueError, AttributeError):
+                    pass
+            
+            results.append(AvailableFilingResponse(
+                accession_number=filing.accession_number,
+                filing_date=filing.filing_date,
+                fiscal_period=fiscal_period,
+                report_type=filing.report_type,
+                is_downloaded=is_downloaded,
+                existing_report_id=existing_report_id,
+                file_format=filing.file_format,
+                report_url=filing.report_url
+            ))
+        
+        return results
+        
+    except SECAPIError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Failed to fetch filings from SEC: {str(e)}"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error fetching available filings: {str(e)}"
+        )
+
+
 @router.post("/download", response_model=ReportUploadResponse)
 async def download_from_sec(
     download_request: SECDownloadRequest,
@@ -332,6 +480,7 @@ async def download_from_sec(
     
     Requires Pro or Enterprise subscription.
     Downloads latest filing for the specified ticker and report type.
+    If accession_number or filing_date is provided, downloads that specific filing instead.
     """
     from ...services.sec_downloader import SECDownloader
     
@@ -360,18 +509,61 @@ async def download_from_sec(
         # Initialize SEC downloader
         sec_downloader = SECDownloader()
         
-        # Download latest filing
-        download_result = await sec_downloader.download_latest_filing(
-            ticker_symbol=download_request.ticker_symbol,
-            report_type=download_request.report_type,
-            fiscal_year=download_request.fiscal_year
-        )
+        # Determine which filing to download
+        if download_request.accession_number or download_request.filing_date:
+            # Download specific filing
+            download_result = await sec_downloader.download_specific_filing(
+                ticker_symbol=download_request.ticker_symbol,
+                report_type=download_request.report_type,
+                accession_number=download_request.accession_number,
+                filing_date=download_request.filing_date
+            )
+        else:
+            # Download latest filing
+            download_result = await sec_downloader.download_latest_filing(
+                ticker_symbol=download_request.ticker_symbol,
+                report_type=download_request.report_type,
+                fiscal_year=download_request.fiscal_year
+            )
         
         if not download_result['success']:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=download_result.get('error', 'Failed to download report from SEC.gov')
             )
+        
+        # Check if report already exists before moving files
+        filing_date = None
+        if download_result.get('filing_date'):
+            try:
+                filing_date = datetime.fromisoformat(download_result['filing_date']).date()
+            except (ValueError, AttributeError):
+                pass
+        
+        if filing_date:
+            existing_report = db.query(FinancialReport).filter(
+                FinancialReport.company_id == company.id,
+                FinancialReport.report_type == ReportType(download_request.report_type),
+                FinancialReport.filing_date == filing_date
+            ).first()
+            
+            if existing_report:
+                # Clean up downloaded file since it's a duplicate
+                try:
+                    downloaded_file_path = Path(download_result['file_path'])
+                    if downloaded_file_path.exists():
+                        downloaded_file_path.unlink()
+                except Exception:
+                    pass
+                
+                # Return existing report info
+                return ReportUploadResponse(
+                    report_id=str(existing_report.id),
+                    message=f"Report already exists for {download_request.ticker_symbol} ({download_request.report_type}) filed on {filing_date}",
+                    processing_status=existing_report.processing_status.value if existing_report.processing_status else ProcessingStatus.PENDING.value,
+                    file_path=str(Path(existing_report.file_path).relative_to(UPLOAD_DIR)) if existing_report.file_path else None,
+                    estimated_processing_time=None
+                )
         
         # Ensure upload directory exists
         ensure_upload_directory()
@@ -423,9 +615,6 @@ async def download_from_sec(
         db.add(new_report)
         db.commit()
         db.refresh(new_report)
-        
-        # Queue background processing
-        background_tasks.add_task(process_report_background, str(new_report.id))
         
         return ReportUploadResponse(
             report_id=str(new_report.id),
@@ -576,11 +765,10 @@ async def get_report_analysis(
 @router.post("/{report_id}/analyze")
 async def reanalyze_report(
     report_id: str,
-    background_tasks: BackgroundTasks,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """Re-run analysis for a report by resetting status and queuing background processing."""
+    """Re-run analysis for a report by resetting status only (processing via CLI)."""
     try:
         report_uuid = uuid.UUID(report_id)
     except ValueError:
@@ -590,17 +778,15 @@ async def reanalyze_report(
     if not report:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
 
-    # Reset to pending and enqueue analysis
+    # Reset to pending only; CLI will perform processing
     report.reset_to_pending()
     report.updated_at = datetime.now(timezone.utc)
     db.add(report)
     db.commit()
 
-    background_tasks.add_task(process_report_background, report_id)
-
     return {
         "report_id": report_id,
-        "message": "Report re-queued for analysis",
+        "message": "Report status reset to PENDING. Use CLI to process.",
         "processing_status": ProcessingStatus.PENDING.value,
     }
 
@@ -641,3 +827,51 @@ async def batch_upload_reports(
         ))
     
     return results
+@router.patch("/{report_id}/status", response_model=ReportResponse)
+async def update_report_status(
+    report_id: str,
+    payload: UpdateReportStatusRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update the processing status of a financial report.
+
+    Allows marking a report back to PENDING to re-queue processing or for manual correction.
+    """
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report ID format")
+
+    report: FinancialReport | None = db.query(FinancialReport).filter(FinancialReport.id == report_uuid).first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    # Update status
+    new_status = ProcessingStatus(payload.status)
+    report.processing_status = new_status
+    # If moving to PENDING, clear processed_at so UI reflects pending state consistently
+    if new_status == ProcessingStatus.PENDING:
+        report.processed_at = None
+
+    report.updated_at = datetime.now(timezone.utc)
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    return ReportResponse(
+        id=str(report.id),
+        company_id=str(report.company_id),
+        company_name=report.company.company_name if report.company else None,
+        ticker_symbol=report.company.ticker_symbol if report.company else None,
+        report_type=report.report_type.value if report.report_type else "Other",
+        fiscal_period=report.fiscal_period,
+        filing_date=report.filing_date.isoformat() if report.filing_date else None,
+        file_format=report.file_format.value if report.file_format else "TXT",
+        file_size_bytes=report.file_size_bytes,
+        download_source=report.download_source.value if report.download_source else "MANUAL_UPLOAD",
+        processing_status=report.processing_status.value if report.processing_status else "PENDING",
+        created_at=report.created_at.isoformat() if report.created_at else datetime.now(timezone.utc).isoformat(),
+        processed_at=report.processed_at.isoformat() if report.processed_at else None,
+    )
+

@@ -57,3 +57,4 @@ def downgrade() -> None:
     # Drop table
     op.drop_table('batch_jobs')
 
+

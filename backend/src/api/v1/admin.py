@@ -13,9 +13,9 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends, Query
 from pydantic import BaseModel, EmailStr
 
-from ...core.security import get_current_user, require_admin
+from ...core.security import get_current_user
 from ...database.connection import get_db
-from ...models.user import User, SubscriptionTier
+from ...models.user import User
 from ...models.company import Company
 
 router = APIRouter()
@@ -175,13 +175,13 @@ async def update_user(
         if update_data.email is not None:
             user.email = update_data.email
         if update_data.subscription_tier is not None:
-            try:
-                user.subscription_tier = SubscriptionTier(update_data.subscription_tier)
-            except ValueError:
+            valid_tiers = ["Basic", "Pro", "Enterprise"]
+            if update_data.subscription_tier not in valid_tiers:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Invalid subscription tier: {update_data.subscription_tier}"
+                    detail=f"Invalid subscription tier: {update_data.subscription_tier}. Must be one of: {', '.join(valid_tiers)}"
                 )
+            user.subscription_tier = update_data.subscription_tier
         if update_data.is_active is not None:
             user.is_active = update_data.is_active
         if update_data.full_name is not None:
@@ -243,9 +243,9 @@ async def get_subscription_stats(
     """
     try:
         total_users = db.query(User).count()
-        basic_tier = db.query(User).filter(User.subscription_tier == SubscriptionTier.BASIC).count()
-        pro_tier = db.query(User).filter(User.subscription_tier == SubscriptionTier.PRO).count()
-        enterprise_tier = db.query(User).filter(User.subscription_tier == SubscriptionTier.ENTERPRISE).count()
+        basic_tier = db.query(User).filter(User.subscription_tier == "Basic").count()
+        pro_tier = db.query(User).filter(User.subscription_tier == "Pro").count()
+        enterprise_tier = db.query(User).filter(User.subscription_tier == "Enterprise").count()
         inactive_users = db.query(User).filter(User.is_active == False).count()
         
         return SubscriptionStatsResponse(

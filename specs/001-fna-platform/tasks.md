@@ -157,7 +157,7 @@
 - [x] T073 [US4] Create webhook endpoints for enterprise notifications in backend/src/api/webhooks/handlers.py
 - [x] T074 [US4] Add comprehensive API documentation and examples in docs/api/
 - [x] T075 [US4] Create batch status tracking and progress updates (implemented in BatchProcessor)
-- [x] T076 [US4] Implement async job queue for batch processing
+- [x] T076 [US4] Implement async job queue for batch processing using Celery with Redis broker, including batch status tracking endpoint
 
 **Checkpoint**: All user stories should now be fully functional with enterprise features
 

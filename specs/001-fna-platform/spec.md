@@ -67,7 +67,7 @@ A research firm integrates FNA sentiment data into their existing investment res
 **Acceptance Scenarios**:
 
 1. **Given** integration credentials, **When** a client makes authenticated requests, **Then** they receive structured data responses with sentiment analysis results
-2. **Given** bulk analysis needs, **When** multiple reports are submitted programmatically, **Then** the system processes them asynchronously and provides status updates
+2. **Given** bulk analysis needs, **When** multiple reports are submitted programmatically via batch endpoint, **Then** the system accepts the request immediately, returns a batch job identifier and task ID, processes reports asynchronously via job queue, and provides real-time status updates via batch status endpoint
 3. **Given** integration requirements, **When** data responses are returned, **Then** they include tone scores, delta metrics, key excerpts, and confidence levels
 
 ---
@@ -105,7 +105,7 @@ A research firm integrates FNA sentiment data into their existing investment res
 - **FR-014**: System MUST generate alerts when narrative tone changes exceed threshold percentages that are user-configurable per company (5-50% range) with smart industry-based defaults and user override options
 - **FR-015**: System MUST store analysis results indefinitely and allow retrieval of historical comparisons across unlimited time periods
 - **FR-016**: System MUST provide user authentication and maintain user-specific analysis history
-- **FR-017**: System MUST support batch processing for multiple report analysis with a maximum limit of 10 reports per batch request
+- **FR-017**: System MUST support asynchronous batch processing for multiple report analysis with a maximum limit of 10 reports per batch request, returning immediately with a batch job identifier for status tracking
 - **FR-018**: System MUST download the most recent 10-K filing by default when provided with company ticker symbols, with user option to specify alternative report types (10-Q, 8-K) and periods
 - **FR-019**: System MUST implement tiered user access based on subscription levels (Basic/Pro/Enterprise) with feature restrictions aligned to monetization strategy
 - **FR-020**: System MUST cross-reference narrative tone analysis with structured financial performance metrics extracted from iXBRL data to provide enhanced insights
@@ -136,7 +136,7 @@ A research firm integrates FNA sentiment data into their existing investment res
 - **SC-011**: Automatic report downloads from SEC.gov complete successfully for 95% of valid ticker symbol requests
 - **SC-012**: iXBRL file parsing extracts both narrative content and structured data with 90% accuracy compared to manual extraction
 - **SC-013**: Multi-dimensional sentiment scoring (optimism, risk, uncertainty) shows consistent correlation patterns with market volatility events with 75% accuracy
-- **SC-014**: Batch processing completes analysis of 10 reports within 10 minutes for 95% of requests
+- **SC-014**: Batch processing submits jobs asynchronously and completes analysis of 10 reports within 10 minutes for 95% of requests, with real-time status tracking available via batch job identifier
 - **SC-015**: Tiered access control prevents unauthorized feature access with 100% compliance across subscription levels
 - **SC-016**: Cross-referenced analysis combining narrative sentiment and financial metrics provides insights rated as valuable by 80% of users
 
@@ -170,3 +170,5 @@ A research firm integrates FNA sentiment data into their existing investment res
 - Subscription management system for implementing tiered access controls
 - Industry classification database for intelligent alert threshold defaults
 - Financial metrics correlation engine for cross-referencing narrative with performance data
+- Asynchronous job queue system (Celery with Redis broker) for batch processing operations
+- Redis server for task queue management and result storage

@@ -9,12 +9,12 @@
 
 AI-powered Financial Narrative Analyzer platform that automatically downloads financial reports from SEC.gov, extracts narrative content from multiple formats (PDF, HTML, TXT, iXBRL), and performs multi-dimensional sentiment analysis (optimism, risk, uncertainty) with comparison capabilities across reporting periods. Core value: automated detection of narrative tone shifts in management communications that may signal strategic changes or emerging risks before they appear in financial metrics.
 
-**Technical Approach**: FastAPI backend with Qwen3-4B LLM for sentiment analysis, PostgreSQL with pgvector for data storage and vector search, Celery with Redis for asynchronous batch processing, React frontend for visualization, and programmatic API access for enterprise integration. Cross-references narrative sentiment with structured financial data from iXBRL parsing for enhanced insights.
+**Technical Approach**: FastAPI backend with Qwen3-4B LLM for sentiment analysis, PostgreSQL with pgvector for data storage and vector search, Celery with PostgreSQL broker/backend for asynchronous batch processing, React frontend for visualization, and programmatic API access for enterprise integration. Cross-references narrative sentiment with structured financial data from iXBRL parsing for enhanced insights.
 
 ## Technical Context
 
 **Language/Version**: Python 3.11+ (backend), React 18+ with TypeScript (frontend)  
-**Primary Dependencies**: FastAPI, Transformers library, Qwen3-4B LLM, PostgreSQL, pgvector, SQLAlchemy, Celery, Redis, React, Tailwind CSS  
+**Primary Dependencies**: FastAPI, Transformers library, Qwen3-4B LLM, PostgreSQL, pgvector, SQLAlchemy, Celery, Kombu (SQLAlchemy transport), React, Tailwind CSS  
 **Storage**: PostgreSQL with pgvector extension for structured data and vector embeddings, local filesystem for uploaded documents  
 **Testing**: pytest (backend), Jest/React Testing Library (frontend)  
 **Target Platform**: Linux server (containerized deployment), modern web browsers  

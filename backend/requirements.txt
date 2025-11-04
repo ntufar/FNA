@@ -36,7 +36,8 @@ python-dotenv==1.0.0
 pydantic-settings==2.1.0
 httpx==0.25.2
 aiofiles==23.2.0
-# Celery and Redis removed - using PostgreSQL-backed task queue with FastAPI BackgroundTasks instead
+celery==5.3.4
+kombu[sqlalchemy]==5.3.4
 
 # Development & Testing
 pytest==7.4.3

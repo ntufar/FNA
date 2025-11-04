@@ -170,5 +170,4 @@ A research firm integrates FNA sentiment data into their existing investment res
 - Subscription management system for implementing tiered access controls
 - Industry classification database for intelligent alert threshold defaults
 - Financial metrics correlation engine for cross-referencing narrative with performance data
-- Asynchronous job queue system (Celery with Redis broker) for batch processing operations
-- Redis server for task queue management and result storage
+- Asynchronous job queue system (Celery with PostgreSQL broker and backend) for batch processing operations

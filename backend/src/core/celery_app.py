@@ -1,28 +1,26 @@
 """
 Celery application configuration for async task processing.
 
-Provides Celery app instance configured with Redis broker and result backend.
+Provides Celery app instance configured with PostgreSQL broker and result backend.
 """
 
 from celery import Celery
 from celery.schedules import crontab
-import os
 
 from .config import get_settings
 
 settings = get_settings()
 
-# Redis configuration for Celery broker and result backend
-redis_url = os.getenv(
-    "REDIS_URL",
-    f"redis://localhost:6379/0"
-)
+# PostgreSQL configuration for Celery broker and result backend
+# Uses database URL from settings (same database as application)
+database_url = settings.database_url
 
-# Create Celery app
+# Create Celery app with PostgreSQL as broker and backend
+# Celery uses SQLAlchemy transport for database broker
 celery_app = Celery(
     "fna_platform",
-    broker=redis_url,
-    backend=redis_url,
+    broker=f"sqla+{database_url}",
+    backend=f"db+{database_url}",
     include=["backend.src.tasks.batch_processing"]
 )
 

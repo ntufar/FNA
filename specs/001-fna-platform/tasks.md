@@ -147,16 +147,16 @@
 
 ### Implementation for User Story 4
 
-- [ ] T066 [P] [US4] Implement API key authentication in backend/src/core/api_auth.py
-- [ ] T067 [P] [US4] Create batch processing endpoint (/reports/batch) in backend/src/api/v1/reports.py
-- [ ] T068 [US4] Implement BatchProcessor service with 10-report limit in backend/src/services/batch_processor.py
-- [ ] T069 [US4] Create vector similarity search endpoint (/search/similar) in backend/src/api/v1/search.py
-- [ ] T070 [US4] Implement EmbeddingService with sentence-transformers in backend/src/services/embedding_service.py
-- [ ] T071 [US4] Add rate limiting middleware per API tier (Basic/Pro/Enterprise) in backend/src/middleware/rate_limiting.py
-- [ ] T072 [US4] Implement subscription tier access control in backend/src/middleware/subscription_check.py
-- [ ] T073 [US4] Create webhook endpoints for enterprise notifications in backend/src/api/v1/webhooks.py
+- [x] T066 [P] [US4] Implement API key authentication in backend/src/core/api_auth.py
+- [x] T067 [P] [US4] Create batch processing endpoint (/reports/batch) in backend/src/api/v1/reports.py
+- [x] T068 [US4] Implement BatchProcessor service with 10-report limit in backend/src/services/batch_processor.py
+- [x] T069 [US4] Create vector similarity search endpoint (/search/similar) in backend/src/api/v1/analysis.py
+- [x] T070 [US4] Implement EmbeddingService with sentence-transformers in backend/src/services/embedding_service.py
+- [x] T071 [US4] Add rate limiting middleware per API tier (Basic/Pro/Enterprise) in backend/src/middleware/rate_limiting.py
+- [x] T072 [US4] Implement subscription tier access control in backend/src/middleware/subscription_check.py
+- [x] T073 [US4] Create webhook endpoints for enterprise notifications in backend/src/api/webhooks/handlers.py
 - [ ] T074 [US4] Add comprehensive API documentation and examples in docs/api/
-- [ ] T075 [US4] Create batch status tracking and progress updates
+- [x] T075 [US4] Create batch status tracking and progress updates (implemented in BatchProcessor)
 - [ ] T076 [US4] Implement async job queue for batch processing
 
 **Checkpoint**: All user stories should now be fully functional with enterprise features

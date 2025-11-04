@@ -25,6 +25,7 @@ from .api.v1.companies import router as companies_router
 from .api.v1.reports import router as reports_router
 from .api.v1.analysis import router as analysis_router
 from .api.v1.alerts import router as alerts_router
+from .api.webhooks.handlers import router as webhooks_router
 
 # Setup logging first
 setup_logging()
@@ -249,6 +250,12 @@ def register_routes(app: FastAPI):
         alerts_router,
         prefix="/v1/alerts",
         tags=["Alerts"]
+    )
+    
+    app.include_router(
+        webhooks_router,
+        prefix="/v1/webhooks",
+        tags=["Webhooks"]
     )
     
     logger.info("API routes registered successfully")

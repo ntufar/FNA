@@ -11,6 +11,7 @@ from pydantic import BaseModel, validator, ConfigDict
 from sqlalchemy.orm import Session
 
 from ...core.security import get_current_user, require_pro_tier
+from ...core.api_auth import get_current_user_or_api_key, require_api_access
 from ...database.connection import get_db
 from ...models.company import Company
 from ...models.financial_report import FinancialReport, ReportType, FileFormat, ProcessingStatus, DownloadSource
@@ -194,6 +195,36 @@ class UpdateReportStatusRequest(BaseModel):
             return v
         except Exception:
             raise ValueError(f"Invalid status. Must be one of: {', '.join([s.value for s in ProcessingStatus])}")
+
+
+class BatchProcessRequest(BaseModel):
+    """Request model for batch processing reports."""
+    report_ids: List[str]
+    
+    @validator('report_ids')
+    def validate_report_ids(cls, v):
+        if not v:
+            raise ValueError("report_ids cannot be empty")
+        if len(v) > 10:
+            raise ValueError("Maximum 10 reports allowed per batch")
+        # Validate UUID format
+        for rid in v:
+            try:
+                uuid.UUID(rid)
+            except ValueError:
+                raise ValueError(f"Invalid report ID format: {rid}")
+        return v
+
+
+class BatchProcessResponse(BaseModel):
+    """Response model for batch processing."""
+    batch_id: str
+    status: str
+    total_reports: int
+    successful: int
+    failed: int
+    results: List[Dict[str, Any]]
+    processed_at: str
 
 
 
@@ -791,42 +822,46 @@ async def reanalyze_report(
     }
 
 
-@router.post("/batch", response_model=List[ReportUploadResponse])
-async def batch_upload_reports(
-    reports_data: List[Dict[str, Any]],
-    current_user: Dict[str, Any] = Depends(require_pro_tier)
+@router.post("/batch", response_model=BatchProcessResponse)
+async def batch_process_reports(
+    batch_request: BatchProcessRequest,
+    current_user: Dict[str, Any] = Depends(require_pro_tier),
+    db: Session = Depends(get_db)
 ):
-    """Upload multiple reports for batch processing.
+    """Process multiple reports in batch.
     
-    Requires Pro or Enterprise subscription with batch limits.
-    TODO: Implement batch processing with subscription limits.
+    Requires Pro or Enterprise subscription. Batch size is limited by subscription tier:
+    - Pro: 7 reports max
+    - Enterprise: 10 reports max
     """
-    # Check batch limit based on subscription tier
-    batch_limits = {
-        "Basic": 3,
-        "Pro": 7, 
-        "Enterprise": 10
-    }
+    from ...services.batch_processor import BatchProcessor
     
-    user_tier = current_user.get("subscription_tier", "Basic")
-    max_batch = batch_limits.get(user_tier, 3)
-    
-    if len(reports_data) > max_batch:
+    try:
+        # Convert report IDs to UUIDs
+        report_uuids = [uuid.UUID(rid) for rid in batch_request.report_ids]
+        user_uuid = uuid.UUID(current_user["id"])
+        
+        # Process batch
+        processor = BatchProcessor(db)
+        result = processor.process_batch(
+            user_id=user_uuid,
+            report_ids=report_uuids,
+            max_reports=10
+        )
+        
+        return BatchProcessResponse(**result)
+        
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Batch size ({len(reports_data)}) exceeds limit for {user_tier} tier ({max_batch})"
+            detail=str(e)
         )
-    
-    # Mock batch processing
-    results = []
-    for i, report_data in enumerate(reports_data):
-        results.append(ReportUploadResponse(
-            report_id=f"batch-report-{i+1}",
-            message="Queued for batch processing",
-            processing_status="PENDING"
-        ))
-    
-    return results
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch processing failed: {str(e)}"
+        )
 @router.patch("/{report_id}/status", response_model=ReportResponse)
 async def update_report_status(
     report_id: str,

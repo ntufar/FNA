@@ -189,38 +189,107 @@ async def compare_reports(
 @router.post("/search/similar")
 async def search_similar_content(
     search_request: SimilaritySearchRequest,
-    current_user: Dict[str, Any] = Depends(require_enterprise_tier)
+    current_user: Dict[str, Any] = Depends(require_enterprise_tier),
+    db: Session = Depends(get_db)
 ):
     """Find similar narrative content using vector similarity search.
     
-    Requires Enterprise subscription.
-    TODO: Implement vector similarity search using embeddings.
+    Requires Enterprise subscription. Searches narrative embeddings for content
+    similar to the query text using cosine similarity.
     """
-    # TODO: Generate embedding for query text
-    # TODO: Search narrative_embeddings table for similar vectors
-    # TODO: Return matching content with similarity scores
+    from ...services.embedding_service import get_embedding_service
+    from ...models.narrative_embedding import NarrativeEmbedding
+    from ...models.company import Company
+    import numpy as np
+    import uuid
     
-    # Mock similarity search results
-    mock_results = [
-        {
-            "report_id": "report-1",
-            "text_chunk": "Management remains optimistic about future growth prospects despite current market challenges.",
-            "similarity_score": 0.87,
-            "company": "Apple Inc.",
-            "report_type": "10-K",
-            "filing_date": "2024-10-31"
-        },
-        {
-            "report_id": "report-3",
-            "text_chunk": "We are confident in our ability to navigate the evolving market landscape and capitalize on emerging opportunities.",
-            "similarity_score": 0.82,
-            "company": "Microsoft Corporation", 
-            "report_type": "10-Q",
-            "filing_date": "2024-07-31"
-        }
-    ]
+    # Validate and load embedding service
+    embedding_service = get_embedding_service()
+    if not embedding_service.is_loaded():
+        if not embedding_service.load_model():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Embedding service unavailable"
+            )
     
-    return {"results": mock_results[:search_request.limit]}
+    # Generate embedding for query text
+    try:
+        query_embedding = embedding_service.encode_texts(search_request.query_text)
+        query_vector = query_embedding[0]  # Get first (and only) embedding
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate query embedding: {str(e)}"
+        )
+    
+    # Build query for embeddings
+    query = db.query(NarrativeEmbedding).join(NA).join(FinancialReport)
+    
+    # Filter by company if specified
+    if search_request.company_id:
+        try:
+            company_uuid = uuid.UUID(search_request.company_id)
+            query = query.filter(FinancialReport.company_id == company_uuid)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid company ID format"
+            )
+    
+    # Fetch all matching embeddings
+    embeddings = query.all()
+    
+    if not embeddings:
+        return {"results": []}
+    
+    # Calculate similarities
+    results = []
+    for emb in embeddings:
+        try:
+            # Get stored embedding vector
+            stored_vector = emb.embedding_vector
+            if not stored_vector or not isinstance(stored_vector, list):
+                continue
+            
+            # Convert to numpy array for similarity calculation
+            stored_array = np.array(stored_vector)
+            query_array = np.array(query_vector)
+            
+            # Calculate cosine similarity
+            dot_product = np.dot(query_array, stored_array)
+            norm_query = np.linalg.norm(query_array)
+            norm_stored = np.linalg.norm(stored_array)
+            
+            if norm_query == 0 or norm_stored == 0:
+                similarity = 0.0
+            else:
+                similarity = float(dot_product / (norm_query * norm_stored))
+            
+            # Get related report and company info
+            report = emb.narrative_analysis.report if emb.narrative_analysis else None
+            company = report.company if report else None
+            
+            results.append({
+                "report_id": str(report.id) if report else None,
+                "analysis_id": str(emb.analysis_id),
+                "text_chunk": emb.text_content[:500] + "..." if len(emb.text_content) > 500 else emb.text_content,
+                "section_type": emb.section_type.value if emb.section_type else None,
+                "similarity_score": round(similarity, 4),
+                "company": company.company_name if company else None,
+                "ticker_symbol": company.ticker_symbol if company else None,
+                "report_type": report.report_type.value if report and report.report_type else None,
+                "filing_date": report.filing_date.isoformat() if report and report.filing_date else None,
+            })
+            
+        except Exception as e:
+            # Skip embeddings that fail to process
+            continue
+    
+    # Sort by similarity score (descending) and limit results
+    results.sort(key=lambda x: x["similarity_score"], reverse=True)
+    results = results[:search_request.limit]
+    
+    return {"results": results}
 
 
 @router.get("/trends/{company_id}")

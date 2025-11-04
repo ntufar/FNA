@@ -450,6 +450,11 @@ class ApiClient {
     await this.client.delete(`/reports/${id}`);
   }
 
+  async setReportStatus(id: string, status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'): Promise<FinancialReport> {
+    const response = await this.client.patch<FinancialReport>(`/reports/${id}/status`, { status });
+    return response.data as any;
+  }
+
   // Analysis Methods
   async getReportAnalysis(reportId: string): Promise<NarrativeAnalysis> {
     const response = await this.client.get<NarrativeAnalysis>(`/reports/${reportId}/analysis`);

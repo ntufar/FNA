@@ -183,6 +183,18 @@ class AvailableFilingResponse(BaseModel):
     existing_report_id: Optional[str] = None
     file_format: str
     report_url: Optional[str] = None
+class UpdateReportStatusRequest(BaseModel):
+    """Request model to update the processing status of a report."""
+    status: str
+
+    @validator('status')
+    def validate_status(cls, v):
+        try:
+            ProcessingStatus(v)
+            return v
+        except Exception:
+            raise ValueError(f"Invalid status. Must be one of: {', '.join([s.value for s in ProcessingStatus])}")
+
 
 
 @router.get("/", response_model=List[ReportResponse])
@@ -815,3 +827,51 @@ async def batch_upload_reports(
         ))
     
     return results
+@router.patch("/{report_id}/status", response_model=ReportResponse)
+async def update_report_status(
+    report_id: str,
+    payload: UpdateReportStatusRequest,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update the processing status of a financial report.
+
+    Allows marking a report back to PENDING to re-queue processing or for manual correction.
+    """
+    try:
+        report_uuid = uuid.UUID(report_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid report ID format")
+
+    report: FinancialReport | None = db.query(FinancialReport).filter(FinancialReport.id == report_uuid).first()
+    if not report:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found")
+
+    # Update status
+    new_status = ProcessingStatus(payload.status)
+    report.processing_status = new_status
+    # If moving to PENDING, clear processed_at so UI reflects pending state consistently
+    if new_status == ProcessingStatus.PENDING:
+        report.processed_at = None
+
+    report.updated_at = datetime.now(timezone.utc)
+    db.add(report)
+    db.commit()
+    db.refresh(report)
+
+    return ReportResponse(
+        id=str(report.id),
+        company_id=str(report.company_id),
+        company_name=report.company.company_name if report.company else None,
+        ticker_symbol=report.company.ticker_symbol if report.company else None,
+        report_type=report.report_type.value if report.report_type else "Other",
+        fiscal_period=report.fiscal_period,
+        filing_date=report.filing_date.isoformat() if report.filing_date else None,
+        file_format=report.file_format.value if report.file_format else "TXT",
+        file_size_bytes=report.file_size_bytes,
+        download_source=report.download_source.value if report.download_source else "MANUAL_UPLOAD",
+        processing_status=report.processing_status.value if report.processing_status else "PENDING",
+        created_at=report.created_at.isoformat() if report.created_at else datetime.now(timezone.utc).isoformat(),
+        processed_at=report.processed_at.isoformat() if report.processed_at else None,
+    )
+

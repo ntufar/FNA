@@ -109,6 +109,18 @@ const ReportsPage: React.FC = () => {
     }
   }
 
+  async function handleMarkPending(reportId: string) {
+    // Optimistically set status to PENDING
+    setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'PENDING' } : r)));
+    try {
+      const updated = await apiClient.setReportStatus(reportId, 'PENDING');
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, ...updated } as any : r)));
+    } catch (e) {
+      // On error, revert to COMPLETED since action was initiated from that state
+      setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, processing_status: 'COMPLETED' } : r)));
+    }
+  }
+
   if (isLoading) {
     return <LoadingSpinner />;
   }
@@ -235,6 +247,15 @@ const ReportsPage: React.FC = () => {
                       >
                         Analyze
                       </button>
+                      {r.processing_status === 'COMPLETED' && (
+                        <button
+                          onClick={() => handleMarkPending(r.id)}
+                          className="text-amber-600 hover:text-amber-800"
+                          title="Mark as Pending"
+                        >
+                          Mark as Pending
+                        </button>
+                      )}
                       {r.processing_status === 'FAILED' && (
                         <button
                           onClick={() => handleReanalyze(r.id)}

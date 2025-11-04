@@ -27,6 +27,7 @@ from .sentiment_analyzer import SentimentAnalyzer, SentimentAnalysisResult
 from .sec_downloader import SECDownloader
 from .ixbrl_parser import get_ixbrl_parser, extract_financial_metrics, iXBRLParsingError
 from .embedding_service import EmbeddingService
+from .financial_metrics_cross_reference import FinancialMetricsCrossReference
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +107,7 @@ class DocumentProcessor:
         self.sentiment_analyzer = SentimentAnalyzer()
         self.sec_downloader = SECDownloader()
         self.embedding_service = EmbeddingService()
+        self.cross_reference_service = FinancialMetricsCrossReference()
         
         # Processing configuration
         self.max_processing_time = 300  # 5 minutes maximum
@@ -390,6 +392,30 @@ class DocumentProcessor:
             
             # Update narrative sections with extracted content
             narrative_analysis.narrative_sections = narrative_sections
+            
+            # Perform cross-referenced analysis (FR-020)
+            if financial_metrics:
+                try:
+                    cross_reference_insights = self.cross_reference_service.analyze_cross_reference(
+                        narrative_analysis,
+                        financial_metrics
+                    )
+                    
+                    # Enhance financial_metrics with cross-reference insights
+                    if narrative_analysis.financial_metrics is None:
+                        narrative_analysis.financial_metrics = {}
+                    
+                    # Add cross-reference insights to financial_metrics
+                    narrative_analysis.financial_metrics['cross_reference_insights'] = cross_reference_insights
+                    
+                    logger.info(
+                        f"Cross-referenced analysis completed: "
+                        f"{len(cross_reference_insights.get('correlations', []))} correlations, "
+                        f"{len(cross_reference_insights.get('discrepancies', []))} discrepancies identified"
+                    )
+                except Exception as e:
+                    logger.warning(f"Cross-reference analysis failed (non-critical): {str(e)}")
+                    # Continue without cross-reference if it fails
             
             logger.info(
                 f"Sentiment analysis completed: "

@@ -1,7 +1,8 @@
 """Analysis endpoints for FNA backend API."""
 
 from typing import List, Dict, Any
-from fastapi import APIRouter, HTTPException, status, Depends
+from fastapi import APIRouter, HTTPException, status, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -189,38 +190,107 @@ async def compare_reports(
 @router.post("/search/similar")
 async def search_similar_content(
     search_request: SimilaritySearchRequest,
-    current_user: Dict[str, Any] = Depends(require_enterprise_tier)
+    current_user: Dict[str, Any] = Depends(require_enterprise_tier),
+    db: Session = Depends(get_db)
 ):
     """Find similar narrative content using vector similarity search.
     
-    Requires Enterprise subscription.
-    TODO: Implement vector similarity search using embeddings.
+    Requires Enterprise subscription. Searches narrative embeddings for content
+    similar to the query text using cosine similarity.
     """
-    # TODO: Generate embedding for query text
-    # TODO: Search narrative_embeddings table for similar vectors
-    # TODO: Return matching content with similarity scores
+    from ...services.embedding_service import get_embedding_service
+    from ...models.narrative_embedding import NarrativeEmbedding
+    from ...models.company import Company
+    import numpy as np
+    import uuid
     
-    # Mock similarity search results
-    mock_results = [
-        {
-            "report_id": "report-1",
-            "text_chunk": "Management remains optimistic about future growth prospects despite current market challenges.",
-            "similarity_score": 0.87,
-            "company": "Apple Inc.",
-            "report_type": "10-K",
-            "filing_date": "2024-10-31"
-        },
-        {
-            "report_id": "report-3",
-            "text_chunk": "We are confident in our ability to navigate the evolving market landscape and capitalize on emerging opportunities.",
-            "similarity_score": 0.82,
-            "company": "Microsoft Corporation", 
-            "report_type": "10-Q",
-            "filing_date": "2024-07-31"
-        }
-    ]
+    # Validate and load embedding service
+    embedding_service = get_embedding_service()
+    if not embedding_service.is_loaded():
+        if not embedding_service.load_model():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Embedding service unavailable"
+            )
     
-    return {"results": mock_results[:search_request.limit]}
+    # Generate embedding for query text
+    try:
+        query_embedding = embedding_service.encode_texts(search_request.query_text)
+        query_vector = query_embedding[0]  # Get first (and only) embedding
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate query embedding: {str(e)}"
+        )
+    
+    # Build query for embeddings
+    query = db.query(NarrativeEmbedding).join(NA).join(FinancialReport)
+    
+    # Filter by company if specified
+    if search_request.company_id:
+        try:
+            company_uuid = uuid.UUID(search_request.company_id)
+            query = query.filter(FinancialReport.company_id == company_uuid)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid company ID format"
+            )
+    
+    # Fetch all matching embeddings
+    embeddings = query.all()
+    
+    if not embeddings:
+        return {"results": []}
+    
+    # Calculate similarities
+    results = []
+    for emb in embeddings:
+        try:
+            # Get stored embedding vector
+            stored_vector = emb.embedding_vector
+            if not stored_vector or not isinstance(stored_vector, list):
+                continue
+            
+            # Convert to numpy array for similarity calculation
+            stored_array = np.array(stored_vector)
+            query_array = np.array(query_vector)
+            
+            # Calculate cosine similarity
+            dot_product = np.dot(query_array, stored_array)
+            norm_query = np.linalg.norm(query_array)
+            norm_stored = np.linalg.norm(stored_array)
+            
+            if norm_query == 0 or norm_stored == 0:
+                similarity = 0.0
+            else:
+                similarity = float(dot_product / (norm_query * norm_stored))
+            
+            # Get related report and company info
+            report = emb.narrative_analysis.report if emb.narrative_analysis else None
+            company = report.company if report else None
+            
+            results.append({
+                "report_id": str(report.id) if report else None,
+                "analysis_id": str(emb.analysis_id),
+                "text_chunk": emb.text_content[:500] + "..." if len(emb.text_content) > 500 else emb.text_content,
+                "section_type": emb.section_type.value if emb.section_type else None,
+                "similarity_score": round(similarity, 4),
+                "company": company.company_name if company else None,
+                "ticker_symbol": company.ticker_symbol if company else None,
+                "report_type": report.report_type.value if report and report.report_type else None,
+                "filing_date": report.filing_date.isoformat() if report and report.filing_date else None,
+            })
+            
+        except Exception as e:
+            # Skip embeddings that fail to process
+            continue
+    
+    # Sort by similarity score (descending) and limit results
+    results.sort(key=lambda x: x["similarity_score"], reverse=True)
+    results = results[:search_request.limit]
+    
+    return {"results": results}
 
 
 @router.get("/trends/{company_id}")
@@ -258,3 +328,132 @@ async def get_sentiment_trends(
     }
     
     return mock_trends
+
+
+@router.get("/export/csv")
+async def export_analyses_csv(
+    company_id: str = None,
+    report_id: str = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Export analysis results to CSV format.
+    
+    Supports filtering by company_id or report_id.
+    """
+    from ...utils.export import export_analysis_to_csv, generate_export_filename
+    
+    try:
+        # Query analyses
+        q = db.query(NA).join(FinancialReport, FinancialReport.id == NA.report_id)
+        
+        if company_id:
+            import uuid as _uuid
+            q = q.filter(FinancialReport.company_id == _uuid.UUID(company_id))
+        
+        if report_id:
+            import uuid as _uuid
+            q = q.filter(NA.report_id == _uuid.UUID(report_id))
+        
+        analyses = q.all()
+        
+        # Convert to dictionaries
+        analysis_dicts = []
+        for analysis in analyses:
+            analysis_dicts.append({
+                "id": str(analysis.id),
+                "report_id": str(analysis.report_id),
+                "optimism_score": analysis.optimism_score,
+                "optimism_confidence": analysis.optimism_confidence,
+                "risk_score": analysis.risk_score,
+                "risk_confidence": analysis.risk_confidence,
+                "uncertainty_score": analysis.uncertainty_score,
+                "uncertainty_confidence": analysis.uncertainty_confidence,
+                "key_themes": ", ".join(analysis.key_themes) if analysis.key_themes else "",
+                "processing_time_seconds": analysis.processing_time_seconds,
+                "model_version": analysis.model_version,
+                "created_at": analysis.created_at.isoformat() if getattr(analysis, 'created_at', None) else "",
+            })
+        
+        # Export to CSV
+        csv_file = export_analysis_to_csv(analysis_dicts)
+        filename = generate_export_filename("analyses", "csv")
+        
+        return Response(
+            content=csv_file.read(),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export analyses: {str(e)}"
+        )
+
+
+@router.get("/export/excel")
+async def export_analyses_excel(
+    company_id: str = None,
+    report_id: str = None,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Export analysis results to Excel format.
+    
+    Supports filtering by company_id or report_id.
+    """
+    from ...utils.export import export_analysis_to_excel, generate_export_filename
+    
+    try:
+        # Query analyses
+        q = db.query(NA).join(FinancialReport, FinancialReport.id == NA.report_id)
+        
+        if company_id:
+            import uuid as _uuid
+            q = q.filter(FinancialReport.company_id == _uuid.UUID(company_id))
+        
+        if report_id:
+            import uuid as _uuid
+            q = q.filter(NA.report_id == _uuid.UUID(report_id))
+        
+        analyses = q.all()
+        
+        # Convert to dictionaries
+        analysis_dicts = []
+        for analysis in analyses:
+            analysis_dicts.append({
+                "id": str(analysis.id),
+                "report_id": str(analysis.report_id),
+                "optimism_score": analysis.optimism_score,
+                "optimism_confidence": analysis.optimism_confidence,
+                "risk_score": analysis.risk_score,
+                "risk_confidence": analysis.risk_confidence,
+                "uncertainty_score": analysis.uncertainty_score,
+                "uncertainty_confidence": analysis.uncertainty_confidence,
+                "key_themes": ", ".join(analysis.key_themes) if analysis.key_themes else "",
+                "processing_time_seconds": analysis.processing_time_seconds,
+                "model_version": analysis.model_version,
+                "created_at": analysis.created_at.isoformat() if getattr(analysis, 'created_at', None) else "",
+            })
+        
+        # Export to Excel
+        excel_file = export_analysis_to_excel(analysis_dicts)
+        filename = generate_export_filename("analyses", "excel")
+        
+        return Response(
+            content=excel_file.read(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except ImportError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Excel export requires openpyxl. Install with: pip install openpyxl"
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export analyses: {str(e)}"
+        )

@@ -30,6 +30,7 @@ try:
     from src.models.narrative_delta import NarrativeDelta
     from src.models.alert import Alert
     from src.models.narrative_embedding import NarrativeEmbedding
+    from src.models.batch_job import BatchJob
     
     target_metadata = Base.metadata
 except ImportError:

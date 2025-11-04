@@ -3,6 +3,7 @@
 import os
 import uuid
 import shutil
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -11,6 +12,7 @@ from pydantic import BaseModel, validator, ConfigDict
 from sqlalchemy.orm import Session
 
 from ...core.security import get_current_user, require_pro_tier
+from ...core.api_auth import get_current_user_or_api_key, require_api_access
 from ...database.connection import get_db
 from ...models.company import Company
 from ...models.financial_report import FinancialReport, ReportType, FileFormat, ProcessingStatus, DownloadSource
@@ -18,6 +20,7 @@ from ...services.document_processor import DocumentProcessor
 from ...services.company_lookup import get_official_name_from_ticker
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Constants and configuration
 UPLOAD_DIR = Path("uploads/reports")
@@ -55,6 +58,74 @@ def generate_file_path(company_id: str, filename: str) -> Path:
     unique_filename = f"{timestamp}_{name}{ext}"
     
     return company_dir / unique_filename
+
+
+async def process_batch_background(
+    batch_id: str,
+    user_id: str,
+    report_ids: List[str]
+):
+    """Background task to process a batch of reports.
+    
+    Uses PostgreSQL for job tracking - no external message broker required.
+    Updates batch_jobs table with progress and results.
+    """
+    from ...database.connection import get_db_session_context
+    from ...models.batch_job import BatchJob
+    from ...models.financial_report import FinancialReport, ProcessingStatus
+    from ...services.batch_processor import BatchProcessor, BatchStatus
+    
+    db = next(get_db_session_context())
+    try:
+        # Get batch job
+        batch_uuid = uuid.UUID(batch_id)
+        batch_job = db.query(BatchJob).filter(
+            BatchJob.batch_id == batch_uuid
+        ).first()
+        
+        if not batch_job:
+            logger.error(f"Batch job {batch_id} not found")
+            return
+        
+        # Update status to PROCESSING
+        batch_job.status = BatchStatus.PROCESSING.value
+        batch_job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        # Process batch using BatchProcessor
+        processor = BatchProcessor(db)
+        result = processor.process_batch(
+            user_id=uuid.UUID(user_id),
+            report_ids=[uuid.UUID(rid) for rid in report_ids],
+            max_reports=10
+        )
+        
+        # Update batch job with results
+        batch_job.status = result["status"]
+        batch_job.successful = result["successful"]
+        batch_job.failed = result["failed"]
+        batch_job.results = result["results"]
+        batch_job.processed_at = datetime.now(timezone.utc)
+        batch_job.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        
+        logger.info(f"Batch processing completed: {batch_id}, status={result['status']}")
+        
+    except Exception as e:
+        logger.error(f"Batch processing failed for {batch_id}: {e}", exc_info=True)
+        try:
+            # Update batch job status to FAILED
+            batch_job = db.query(BatchJob).filter(
+                BatchJob.batch_id == uuid.UUID(batch_id)
+            ).first()
+            if batch_job:
+                batch_job.status = BatchStatus.FAILED.value
+                batch_job.updated_at = datetime.now(timezone.utc)
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
 
 
 async def process_report_background(report_id: str):
@@ -194,6 +265,37 @@ class UpdateReportStatusRequest(BaseModel):
             return v
         except Exception:
             raise ValueError(f"Invalid status. Must be one of: {', '.join([s.value for s in ProcessingStatus])}")
+
+
+class BatchProcessRequest(BaseModel):
+    """Request model for batch processing reports."""
+    report_ids: List[str]
+    
+    @validator('report_ids')
+    def validate_report_ids(cls, v):
+        if not v:
+            raise ValueError("report_ids cannot be empty")
+        if len(v) > 10:
+            raise ValueError("Maximum 10 reports allowed per batch")
+        # Validate UUID format
+        for rid in v:
+            try:
+                uuid.UUID(rid)
+            except ValueError:
+                raise ValueError(f"Invalid report ID format: {rid}")
+        return v
+
+
+class BatchProcessResponse(BaseModel):
+    """Response model for batch processing."""
+    batch_id: str
+    status: str
+    total_reports: int
+    successful: int
+    failed: int
+    results: List[Dict[str, Any]]
+    processed_at: Optional[str] = None
+    task_id: Optional[str] = None  # No longer used (kept for API compatibility)
 
 
 
@@ -791,42 +893,159 @@ async def reanalyze_report(
     }
 
 
-@router.post("/batch", response_model=List[ReportUploadResponse])
-async def batch_upload_reports(
-    reports_data: List[Dict[str, Any]],
-    current_user: Dict[str, Any] = Depends(require_pro_tier)
+@router.post("/batch", response_model=BatchProcessResponse)
+async def batch_process_reports(
+    batch_request: BatchProcessRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Dict[str, Any] = Depends(require_pro_tier),
+    db: Session = Depends(get_db)
 ):
-    """Upload multiple reports for batch processing.
+    """Process multiple reports in batch asynchronously using PostgreSQL-backed queue.
     
-    Requires Pro or Enterprise subscription with batch limits.
-    TODO: Implement batch processing with subscription limits.
+    Requires Pro or Enterprise subscription. Batch size is limited by subscription tier:
+    - Pro: 7 reports max
+    - Enterprise: 10 reports max
+    
+    Returns immediately with batch_id for status tracking.
+    Use GET /reports/batch/{batch_id} to check progress.
+    
+    Uses FastAPI BackgroundTasks with PostgreSQL for job tracking - no external message broker required.
     """
-    # Check batch limit based on subscription tier
-    batch_limits = {
-        "Basic": 3,
-        "Pro": 7, 
-        "Enterprise": 10
-    }
+    from ...models.batch_job import BatchJob
+    from ...models.user import User
+    from ...services.batch_processor import BatchStatus
     
-    user_tier = current_user.get("subscription_tier", "Basic")
-    max_batch = batch_limits.get(user_tier, 3)
-    
-    if len(reports_data) > max_batch:
+    try:
+        # Convert report IDs to UUIDs
+        report_uuids = [uuid.UUID(rid) for rid in batch_request.report_ids]
+        user_uuid = uuid.UUID(current_user["id"])
+        
+        # Get user to check subscription tier limits
+        user = db.query(User).filter(User.id == user_uuid).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        # Check user's batch limit
+        user_batch_limit = user.get_batch_limit()
+        if len(batch_request.report_ids) > user_batch_limit:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Batch size ({len(batch_request.report_ids)}) exceeds your subscription limit ({user_batch_limit})"
+            )
+        
+        # Generate batch ID
+        batch_id = uuid.uuid4()
+        
+        # Create batch job record in database
+        batch_job = BatchJob(
+            id=uuid.uuid4(),
+            batch_id=batch_id,
+            user_id=user_uuid,
+            status=BatchStatus.PENDING.value,
+            total_reports=len(batch_request.report_ids),
+            successful=0,
+            failed=0,
+            report_ids=batch_request.report_ids,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(batch_job)
+        db.commit()
+        db.refresh(batch_job)
+        
+        # Add background task to process batch
+        background_tasks.add_task(
+            process_batch_background,
+            batch_id=str(batch_id),
+            user_id=str(user_uuid),
+            report_ids=batch_request.report_ids
+        )
+        
+        # Return batch info immediately
+        return BatchProcessResponse(
+            batch_id=str(batch_id),
+            status=BatchStatus.PENDING.value,
+            total_reports=len(batch_request.report_ids),
+            successful=0,
+            failed=0,
+            results=[],
+            processed_at=None
+        )
+        
+    except HTTPException:
+        raise
+    except ValueError as e:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Batch size ({len(reports_data)}) exceeds limit for {user_tier} tier ({max_batch})"
+            detail=str(e)
         )
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Batch processing initialization failed: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Batch processing failed: {str(e)}"
+        )
+
+
+@router.get("/batch/{batch_id}", response_model=BatchProcessResponse)
+async def get_batch_status(
+    batch_id: str,
+    task_id: Optional[str] = None,  # Deprecated - kept for API compatibility
+    current_user: Dict[str, Any] = Depends(require_pro_tier),
+    db: Session = Depends(get_db)
+):
+    """Get status of a batch processing job from PostgreSQL.
     
-    # Mock batch processing
-    results = []
-    for i, report_data in enumerate(reports_data):
-        results.append(ReportUploadResponse(
-            report_id=f"batch-report-{i+1}",
-            message="Queued for batch processing",
-            processing_status="PENDING"
-        ))
+    Returns current status and progress for a batch job.
+    Queries the batch_jobs table to get real-time status.
+    """
+    from ...models.batch_job import BatchJob
     
-    return results
+    try:
+        # Query batch job from database
+        batch_uuid = uuid.UUID(batch_id)
+        batch_job = db.query(BatchJob).filter(
+            BatchJob.batch_id == batch_uuid,
+            BatchJob.user_id == uuid.UUID(current_user["id"])  # Ensure user can only see their own jobs
+        ).first()
+        
+        if not batch_job:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Batch job {batch_id} not found"
+            )
+        
+        # Convert to response
+        return BatchProcessResponse(
+            batch_id=str(batch_job.batch_id),
+            status=batch_job.status,
+            total_reports=batch_job.total_reports,
+            successful=batch_job.successful,
+            failed=batch_job.failed,
+            results=batch_job.results or [],
+            processed_at=batch_job.processed_at.isoformat() if batch_job.processed_at else None
+        )
+        
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid batch ID format: {str(e)}"
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting batch status: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get batch status: {str(e)}"
+        )
+
+
 @router.patch("/{report_id}/status", response_model=ReportResponse)
 async def update_report_status(
     report_id: str,

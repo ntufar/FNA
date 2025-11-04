@@ -147,17 +147,17 @@
 
 ### Implementation for User Story 4
 
-- [ ] T066 [P] [US4] Implement API key authentication in backend/src/core/api_auth.py
-- [ ] T067 [P] [US4] Create batch processing endpoint (/reports/batch) in backend/src/api/v1/reports.py
-- [ ] T068 [US4] Implement BatchProcessor service with 10-report limit in backend/src/services/batch_processor.py
-- [ ] T069 [US4] Create vector similarity search endpoint (/search/similar) in backend/src/api/v1/search.py
-- [ ] T070 [US4] Implement EmbeddingService with sentence-transformers in backend/src/services/embedding_service.py
-- [ ] T071 [US4] Add rate limiting middleware per API tier (Basic/Pro/Enterprise) in backend/src/middleware/rate_limiting.py
-- [ ] T072 [US4] Implement subscription tier access control in backend/src/middleware/subscription_check.py
-- [ ] T073 [US4] Create webhook endpoints for enterprise notifications in backend/src/api/v1/webhooks.py
-- [ ] T074 [US4] Add comprehensive API documentation and examples in docs/api/
-- [ ] T075 [US4] Create batch status tracking and progress updates
-- [ ] T076 [US4] Implement async job queue for batch processing
+- [x] T066 [P] [US4] Implement API key authentication in backend/src/core/api_auth.py
+- [x] T067 [P] [US4] Create batch processing endpoint (/reports/batch) in backend/src/api/v1/reports.py
+- [x] T068 [US4] Implement BatchProcessor service with 10-report limit in backend/src/services/batch_processor.py
+- [x] T069 [US4] Create vector similarity search endpoint (/search/similar) in backend/src/api/v1/analysis.py
+- [x] T070 [US4] Implement EmbeddingService with sentence-transformers in backend/src/services/embedding_service.py
+- [x] T071 [US4] Add rate limiting middleware per API tier (Basic/Pro/Enterprise) in backend/src/middleware/rate_limiting.py
+- [x] T072 [US4] Implement subscription tier access control in backend/src/middleware/subscription_check.py
+- [x] T073 [US4] Create webhook endpoints for enterprise notifications in backend/src/api/webhooks/handlers.py
+- [x] T074 [US4] Add comprehensive API documentation and examples in docs/api/
+- [x] T075 [US4] Create batch status tracking and progress updates (implemented in BatchProcessor)
+- [x] T076 [US4] Implement async job queue for batch processing using Celery with PostgreSQL broker and backend, including batch status tracking endpoint
 
 **Checkpoint**: All user stories should now be fully functional with enterprise features
 
@@ -167,22 +167,22 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T077 [P] Add comprehensive error handling and user-friendly error messages across all endpoints
-- [ ] T078 [P] Implement caching for expensive operations (model inference, embeddings)
-- [ ] T079 [P] Add performance monitoring and metrics collection
-- [ ] T080 [P] Create comprehensive API documentation in docs/api/
-- [ ] T081 [P] Add security hardening (input sanitization, SQL injection prevention)
-- [ ] T082 [P] Implement cross-referenced financial metrics analysis per FR-020
-- [ ] T083 [P] Add data export functionality (Excel, CSV) for analysis results
-- [ ] T084 [P] Create admin interface for user and subscription management
-- [ ] T085 [P] Add system health checks and monitoring endpoints
-- [ ] T086 [P] Optimize database queries and add missing indexes
-- [ ] T087 [P] Create deployment scripts and production configuration
-- [ ] T088 Run quickstart.md validation to ensure setup process works
-- [ ] T089 [P] Implement accuracy validation system for FR-011 compliance (85% sentiment classification vs human experts)
-- [ ] T090 [P] Create data retention and lifecycle management system for FR-015 indefinite storage requirements
-- [ ] T091 Performance optimization and load testing validation
-- [ ] T092 Security audit and penetration testing
+- [x] T077 [P] Add comprehensive error handling and user-friendly error messages across all endpoints
+- [x] T078 [P] Implement caching for expensive operations (model inference, embeddings)
+- [x] T079 [P] Add performance monitoring and metrics collection
+- [x] T080 [P] Create comprehensive API documentation in docs/api/
+- [x] T081 [P] Add security hardening (input sanitization, SQL injection prevention)
+- [x] T082 [P] Implement cross-referenced financial metrics analysis per FR-020
+- [x] T083 [P] Add data export functionality (Excel, CSV) for analysis results
+- [x] T084 [P] Create admin interface for user and subscription management
+- [x] T085 [P] Add system health checks and monitoring endpoints
+- [x] T086 [P] Optimize database queries and add missing indexes
+- [x] T087 [P] Create deployment scripts and production configuration
+- [x] T088 Run quickstart.md validation to ensure setup process works
+- [x] T089 [P] Implement accuracy validation system for FR-011 compliance (85% sentiment classification vs human experts)
+- [x] T090 [P] Create data retention and lifecycle management system for FR-015 indefinite storage requirements
+- [x] T091 Performance optimization and load testing validation
+- [x] T092 Security audit and penetration testing
 
 ---
 

@@ -19,12 +19,16 @@ import uvicorn
 from .core.config import get_settings, get_cors_settings
 from .core.exceptions import setup_exception_handlers
 from .core.logging_config import setup_logging, RequestLoggerMiddleware
+from .core.cache import init_caches, get_cache_stats
+from .core.metrics import get_metrics, get_metrics_summary, record_api_metrics
 from .database import init_database, close_database, check_database_health, setup_vector_environment
 from .api.v1.auth import router as auth_router
 from .api.v1.companies import router as companies_router
 from .api.v1.reports import router as reports_router
 from .api.v1.analysis import router as analysis_router
 from .api.v1.alerts import router as alerts_router
+from .api.v1.admin import router as admin_router
+from .api.webhooks.handlers import router as webhooks_router
 
 # Setup logging first
 setup_logging()
@@ -79,6 +83,11 @@ async def lifespan(app: FastAPI):
 
 async def initialize_services():
     """Initialize application services."""
+    # Initialize caches
+    logger.info("Initializing caches...")
+    init_caches()
+    logger.info("Caches initialized successfully")
+    
     # Setup vector environment (pgvector extension and indexes)
     logger.info("Setting up vector environment...")
     vector_setup_results = setup_vector_environment()
@@ -94,8 +103,9 @@ async def initialize_services():
 
 async def cleanup_services():
     """Cleanup application services."""
-    # TODO: Cleanup model resources, cache, etc.
-    pass
+    from .core.cache import clear_all_caches
+    clear_all_caches()
+    logger.info("Caches cleared")
 
 
 def create_application() -> FastAPI:
@@ -196,10 +206,10 @@ def setup_middleware(app: FastAPI):
         
         return response
     
-    # Processing time middleware
+    # Processing time and metrics middleware
     @app.middleware("http")
     async def add_process_time(request: Request, call_next):
-        """Add processing time header to responses."""
+        """Add processing time header and record metrics."""
         import time
         
         start_time = time.time()
@@ -207,6 +217,14 @@ def setup_middleware(app: FastAPI):
         process_time = time.time() - start_time
         
         response.headers["X-Processing-Time"] = str(process_time)
+        
+        # Record metrics
+        record_api_metrics(
+            method=request.method,
+            endpoint=request.url.path,
+            status_code=response.status_code,
+            duration=process_time
+        )
         
         return response
     
@@ -251,6 +269,18 @@ def register_routes(app: FastAPI):
         tags=["Alerts"]
     )
     
+    app.include_router(
+        webhooks_router,
+        prefix="/v1/webhooks",
+        tags=["Webhooks"]
+    )
+    
+    app.include_router(
+        admin_router,
+        prefix="/v1/admin",
+        tags=["Admin"]
+    )
+    
     logger.info("API routes registered successfully")
 
 
@@ -265,22 +295,32 @@ def setup_health_checks(app: FastAPI):
     @app.get("/health", response_model=Dict[str, Any])
     async def health_check():
         """
-        Application health check endpoint.
+        Application health check endpoint with comprehensive status.
         
         Returns:
-            dict: Health status information
+            dict: Health status information including database, cache, and services
         """
+        from datetime import datetime
+        
         try:
             # Check database health
             db_health = check_database_health()
+            
+            # Check cache status
+            cache_stats = get_cache_stats()
             
             # Check overall application health
             health_status = {
                 "status": "healthy",
                 "version": "1.0.0",
                 "service": "fna-platform",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
                 "database": db_health,
-                "timestamp": "2025-10-29T00:00:00Z"  # Will be updated with real timestamp
+                "cache": cache_stats,
+                "checks": {
+                    "database": "ok" if db_health.get("status") == "healthy" else "failed",
+                    "cache": "ok" if any(cache_stats.values()) else "warning"
+                }
             }
             
             # If database is not healthy, mark overall as unhealthy
@@ -295,7 +335,7 @@ def setup_health_checks(app: FastAPI):
                 "status": "unhealthy",
                 "error": str(e),
                 "service": "fna-platform",
-                "timestamp": "2025-10-29T00:00:00Z"
+                "timestamp": datetime.utcnow().isoformat() + "Z"
             }
     
     @app.get("/health/ready", response_model=Dict[str, Any])
@@ -347,6 +387,28 @@ def setup_health_checks(app: FastAPI):
             dict: Liveness status
         """
         return {"status": "alive"}
+    
+    @app.get("/metrics")
+    async def metrics_endpoint():
+        """
+        Prometheus metrics endpoint.
+        
+        Returns:
+            str: Prometheus metrics in text format
+        """
+        from fastapi.responses import Response
+        metrics_text = get_metrics()
+        return Response(content=metrics_text, media_type="text/plain")
+    
+    @app.get("/metrics/summary")
+    async def metrics_summary():
+        """
+        Human-readable metrics summary.
+        
+        Returns:
+            dict: Metrics summary
+        """
+        return get_metrics_summary()
     
     logger.info("Health check endpoints configured")
 

@@ -11,10 +11,10 @@ from sqlalchemy import Column, String, Integer, ForeignKey, JSON, DateTime
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
-from .base import Base
+from .base import BaseModel
 
 
-class BatchJob(Base):
+class BatchJob(BaseModel):
     """Model for tracking batch processing jobs.
     
     Uses PostgreSQL as the task queue - no external message broker required.
@@ -22,7 +22,7 @@ class BatchJob(Base):
     
     __tablename__ = 'batch_jobs'
     
-    # Primary identifier
+    # Batch identifier (separate from primary key id)
     batch_id = Column(UUID(as_uuid=True), nullable=False, unique=True, index=True)
     
     # Foreign keys

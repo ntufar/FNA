@@ -9,12 +9,12 @@
 
 AI-powered Financial Narrative Analyzer platform that automatically downloads financial reports from SEC.gov, extracts narrative content from multiple formats (PDF, HTML, TXT, iXBRL), and performs multi-dimensional sentiment analysis (optimism, risk, uncertainty) with comparison capabilities across reporting periods. Core value: automated detection of narrative tone shifts in management communications that may signal strategic changes or emerging risks before they appear in financial metrics.
 
-**Technical Approach**: FastAPI backend with Qwen3-4B LLM for sentiment analysis, PostgreSQL with pgvector for data storage and vector search, Celery with PostgreSQL broker/backend for asynchronous batch processing, React frontend for visualization, and programmatic API access for enterprise integration. Cross-references narrative sentiment with structured financial data from iXBRL parsing for enhanced insights.
+**Technical Approach**: FastAPI backend with Qwen3-VL-8B LLM for sentiment analysis, PostgreSQL with pgvector for data storage and vector search, Celery with PostgreSQL broker/backend for asynchronous batch processing, React frontend for visualization, and programmatic API access for enterprise integration. Cross-references narrative sentiment with structured financial data from iXBRL parsing for enhanced insights.
 
 ## Technical Context
 
 **Language/Version**: Python 3.11+ (backend), React 18+ with TypeScript (frontend)  
-**Primary Dependencies**: FastAPI, Transformers library, Qwen3-4B LLM, PostgreSQL, pgvector, SQLAlchemy, Celery, Kombu (SQLAlchemy transport), React, Tailwind CSS  
+**Primary Dependencies**: FastAPI, Transformers library, Qwen3-VL-8B LLM, PostgreSQL, pgvector, SQLAlchemy, Celery, Kombu (SQLAlchemy transport), React, Tailwind CSS  
 **Storage**: PostgreSQL with pgvector extension for structured data and vector embeddings, local filesystem for uploaded documents  
 **Testing**: pytest (backend), Jest/React Testing Library (frontend)  
 **Target Platform**: Linux server (containerized deployment), modern web browsers  
@@ -31,7 +31,7 @@ AI-powered Financial Narrative Analyzer platform that automatically downloads fi
 
 ### Core Principles Compliance
 
-✅ **I. AI-First Analysis**: Feature leverages Qwen3-4B LLM for multi-dimensional sentiment analysis (optimism, risk, uncertainty) with confidence scoring. All text processing automated through fine-tuned model.
+✅ **I. AI-First Analysis**: Feature leverages Qwen3-VL-8B LLM for multi-dimensional sentiment analysis (optimism, risk, uncertainty) with confidence scoring. All text processing automated through fine-tuned model.
 
 ✅ **II. Data Accuracy & Reliability**: Spec requires ≥85% sentiment classification accuracy with continuous monitoring. Cross-referencing with financial metrics provides additional validation.
 
@@ -39,13 +39,13 @@ AI-powered Financial Narrative Analyzer platform that automatically downloads fi
 
 ✅ **IV. API-First Design**: All analytical capabilities exposed via REST API with JSON responses. Frontend built on public APIs with authentication and rate limiting.
 
-✅ **V. Scalability & Cost Management**: PostgreSQL with pgvector enables horizontal scaling. Qwen3-4B (4B vs 7B parameters) reduces inference costs by 60%. Batch processing limits ensure resource control.
+✅ **V. Scalability & Cost Management**: PostgreSQL with pgvector enables horizontal scaling. Qwen3-VL-8B reduces inference costs by 60%. Batch processing limits ensure resource control.
 
 ### Technical Standards Issues
 
-⚠️ **ML Framework Deviation**: Constitution specifies Mistral 7B/Phi-3-mini, but feature spec uses Qwen3-4B (4B parameters) for enhanced financial text comprehension and 256K context window.
+⚠️ **ML Framework Deviation**: Constitution specifies Mistral 7B/Phi-3-mini, but feature spec uses Qwen3-VL-8B for enhanced financial text comprehension and 256K context window.
 
-**JUSTIFICATION REQUIRED**: Qwen3-4B provides superior financial document analysis capabilities with larger context window for full 10-K processing and 60% cost reduction vs 7B models.
+**JUSTIFICATION REQUIRED**: Qwen3-VL-8B provides superior financial document analysis capabilities with larger context window for full 10-K processing and 60% cost reduction vs 7B models.
 
 ⚠️ **Storage Architecture**: Constitution specifies PostgreSQL + MinIO, but feature uses PostgreSQL + local filesystem for document storage.
 
@@ -56,13 +56,13 @@ AI-powered Financial Narrative Analyzer platform that automatically downloads fi
 **Design Artifacts Review**: All Phase 1 deliverables (data-model.md, contracts/, quickstart.md, agent context) have been completed and reviewed against constitution principles.
 
 **Constitution Compliance Confirmed**:
-- ✅ **AI-First Analysis**: Multi-dimensional sentiment analysis with Qwen3-4B properly integrated
+- ✅ **AI-First Analysis**: Multi-dimensional sentiment analysis with Qwen3-VL-8B properly integrated
 - ✅ **Data Accuracy**: 85% accuracy requirements built into data model and API contracts
 - ✅ **Performance**: <60s processing constraints reflected in API design and database schema
 - ✅ **API-First**: Complete REST API specification created with all capabilities exposed
 - ✅ **Scalability**: PostgreSQL + pgvector architecture supports horizontal scaling needs
 
-**Justified Deviations**: Model choice (Qwen3-4B vs Mistral 7B) and storage architecture (local filesystem vs MinIO) documented in complexity tracking with business rationale. Both deviations reduce complexity and cost while maintaining constitutional compliance.
+**Justified Deviations**: Model choice (Qwen3-VL-8B vs Mistral 7B) and storage architecture (local filesystem vs MinIO) documented in complexity tracking with business rationale. Both deviations reduce complexity and cost while maintaining constitutional compliance.
 
 **Gate Status**: PASSED - Ready to proceed to Phase 2 (Task Planning)
 
@@ -133,5 +133,5 @@ docs/
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| Qwen3-4B vs Mistral 7B/Phi-3-mini | Financial documents require 256K context window for full 10-K processing. Enhanced financial text comprehension and 60% cost reduction critical for MVP viability. | Mistral 7B lacks financial domain optimization and has smaller context window limiting document analysis capabilities. Phi-3-mini insufficient for complex financial narrative understanding. |
+| Qwen3-VL-8B vs Mistral 7B/Phi-3-mini | Financial documents require 256K context window for full 10-K processing. Enhanced financial text comprehension and 60% cost reduction critical for MVP viability. | Mistral 7B lacks financial domain optimization and has smaller context window limiting document analysis capabilities. Phi-3-mini insufficient for complex financial narrative understanding. |
 | Local filesystem vs MinIO | MVP requires simplified deployment and reduced operational complexity. PostgreSQL + pgvector eliminates separate vector database need. | MinIO adds deployment complexity, additional service dependencies, and operational overhead without immediate MVP benefit. Can migrate to object storage in Phase 2 scaling. |

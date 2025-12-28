@@ -3,7 +3,6 @@
 # Web Framework
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==2.5.0
 
 # Database
 sqlalchemy==2.0.23
@@ -12,13 +11,15 @@ psycopg2-binary==2.9.9
 pgvector==0.2.4
 
 # Authentication & Security
-python-jose[cryptography]==3.3.0
+PyJWT==2.8.0
 passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
 python-multipart==0.0.6
 
-# ML & LLM Dependencies (LM Studio API-based)
-sentence-transformers==2.2.2
-# Note: torch/transformers not needed for LM Studio API approach
+# ML & LLM Dependencies
+sentence-transformers>=3.3.1
+torch>=2.0.0
+# Note: torch/transformers are required for local embeddings via sentence-transformers
 
 # SEC API & Document Processing
 requests==2.31.0
@@ -31,13 +32,17 @@ openpyxl==3.1.2
 # iXBRL Processing (per research.md)
 arelle==2.2
 
-# Utilities
-python-dotenv==1.0.0
+# Validation & Types
+pydantic==2.5.3
 pydantic-settings==2.1.0
+email-validator==2.1.0.post1
 httpx==0.25.2
 aiofiles==23.2.0
 celery==5.3.4
 kombu[sqlalchemy]==5.3.4
+
+# Utilities
+python-dotenv==1.0.0
 
 # Development & Testing
 pytest==7.4.3
@@ -51,6 +56,7 @@ flake8==6.1.0
 # Monitoring & Logging
 structlog==23.2.0
 sentry-sdk[fastapi]==1.38.0
+python-json-logger==2.0.7
 
 # Caching
 cachetools==5.3.2

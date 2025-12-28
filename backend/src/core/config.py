@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     
     # LLM Configuration (LM Studio API)
     model_name: str = Field(
-        default="qwen/qwen3-4b-2507",
+        default="qwen/qwen3-vl-8b",
         description="LLM model identifier"
     )
     model_api_url: str = Field(
@@ -41,7 +41,7 @@ class Settings(BaseSettings):
         description="LM Studio API request timeout in seconds"
     )
     model_max_tokens: int = Field(
-        default=10000,
+        default=4096,
         description="Maximum tokens for LLM generation"
     )
     model_temperature: float = Field(

@@ -5,7 +5,7 @@
 
 ## Research Tasks
 
-### R1: Qwen3-4B Deployment Strategy
+### R1: Qwen3-VL-8B Deployment Strategy
 
 **Decision**: Self-hosted deployment with GGUF quantization via transformers library
 
@@ -137,7 +137,7 @@ bnb_config = BitsAndBytesConfig(
 
 | Component | Technology | Justification |
 |-----------|------------|---------------|
-| **LLM** | Qwen3-4B + 4-bit quantization | Financial text optimization, large context, cost efficiency |
+| **LLM** | Qwen3-VL-8B + 4-bit quantization | Financial text optimization, large context, cost efficiency |
 | **iXBRL Parser** | Arelle library | Industry standard, SEC compliance, structured data extraction |
 | **SEC Integration** | EDGAR REST API | Official source, structured responses, rate limit compliance |
 | **Embeddings** | sentence-transformers MiniLM-L6-v2 | Lightweight, fast, semantic understanding |

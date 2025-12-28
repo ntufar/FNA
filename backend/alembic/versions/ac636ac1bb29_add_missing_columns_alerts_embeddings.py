@@ -18,26 +18,45 @@ depends_on = None
 
 def upgrade() -> None:
     # Alerts: add columns introduced by updated model
+    from sqlalchemy import inspect
+    
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    columns = [c['name'] for c in inspector.get_columns('alerts')]
+    
     with op.batch_alter_table("alerts") as batch_op:
-        batch_op.add_column(sa.Column("delta_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=True))
-        batch_op.add_column(sa.Column("actual_change_percentage", sa.Float, nullable=True))
-        batch_op.add_column(sa.Column("alert_message", sa.Text, nullable=True))
-        batch_op.add_column(sa.Column("is_read", sa.Boolean, nullable=False, server_default=sa.text("false")))
-        batch_op.add_column(sa.Column("delivery_method", sa.String(20), nullable=True))
-        batch_op.add_column(sa.Column("delivered_at", sa.TIMESTAMP, nullable=True))
-        batch_op.create_index("idx_alerts_is_read", ["is_read"])
-        # Optional FK to narrative_deltas if table exists
-        try:
-            batch_op.create_foreign_key(
-                "fk_alerts_delta",
-                referent_table="narrative_deltas",
-                local_cols=["delta_id"],
-                remote_cols=["id"],
-                ondelete="CASCADE",
-            )
-        except Exception:
-            # In case of existing constraint or missing table in some envs
-            pass
+        for col_name, col_type in [
+            ("delta_id", sa.dialects.postgresql.UUID(as_uuid=True)),
+            ("actual_change_percentage", sa.Float),
+            ("alert_message", sa.Text),
+            ("is_read", sa.Boolean),
+            ("delivery_method", sa.String(20)),
+            ("delivered_at", sa.TIMESTAMP),
+        ]:
+            if col_name not in columns:
+                if col_name == "is_read":
+                    batch_op.add_column(sa.Column(col_name, col_type, nullable=False, server_default=sa.text("false")))
+                else:
+                    batch_op.add_column(sa.Column(col_name, col_type, nullable=True))
+
+        # Check if index exists
+        indexes = [i['name'] for i in inspector.get_indexes('alerts')]
+        if "idx_alerts_is_read" not in indexes:
+            batch_op.create_index("idx_alerts_is_read", ["is_read"])
+
+        # Check for FK
+        fks = [f['name'] for f in inspector.get_foreign_keys('alerts')]
+        if "fk_alerts_delta" not in fks:
+            try:
+                batch_op.create_foreign_key(
+                    "fk_alerts_delta",
+                    referent_table="narrative_deltas",
+                    local_cols=["delta_id"],
+                    remote_cols=["id"],
+                    ondelete="CASCADE",
+                )
+            except Exception:
+                pass
 
 
 def downgrade() -> None:

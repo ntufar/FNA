@@ -143,7 +143,7 @@ export interface ReportUploadResponse {
 
 // Analysis Types
 export interface ThemeObject { term: string; weight?: number }
-export interface RiskIndicatorObject { type?: string; severity?: string; detail?: string; term?: string; weight?: number; [k: string]: any }
+export interface RiskIndicatorObject { type?: string; severity?: string; detail?: string; term?: string; weight?: number;[k: string]: any }
 
 export interface NarrativeAnalysis {
   id: string;
@@ -200,7 +200,7 @@ export interface Alert {
 }
 
 // Configuration
-const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8001/v1';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8000/v1';
 
 class ApiClient {
   private client: AxiosInstance;
@@ -306,20 +306,20 @@ class ApiClient {
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     const response = await this.client.post<AuthResponse>('/auth/login', credentials);
     const authData = response.data;
-    
+
     this.saveTokens(authData.access_token, authData.refresh_token);
     localStorage.setItem('fna_user', JSON.stringify(authData.user));
-    
+
     return authData;
   }
 
   async register(userData: RegisterRequest): Promise<AuthResponse> {
     const response = await this.client.post<AuthResponse>('/auth/register', userData);
     const authData = response.data;
-    
+
     this.saveTokens(authData.access_token, authData.refresh_token);
     localStorage.setItem('fna_user', JSON.stringify(authData.user));
-    
+
     return authData;
   }
 

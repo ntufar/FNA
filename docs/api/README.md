@@ -472,7 +472,7 @@ Retrieve narrative analysis results for a report.
     "growth_rate": "2.8%"
   },
   "processing_time_seconds": 245,
-  "model_version": "qwen3-4b-2507",
+  "model_version": "qwen3-vl-8b",
   "created_at": "2024-01-15T10:35:00Z"
 }
 ```

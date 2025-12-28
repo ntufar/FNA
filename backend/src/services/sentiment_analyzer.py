@@ -1,7 +1,7 @@
 """
 SentimentAnalyzer service for FNA Platform.
 
-Implements multi-dimensional sentiment analysis using Qwen3-4B model via LM Studio API
+Implements multi-dimensional sentiment analysis using Qwen3-VL-8B model via LM Studio API
 for financial narrative text processing.
 """
 
@@ -79,7 +79,7 @@ class SentimentAnalysisResult:
 
 class SentimentAnalyzer:
     """
-    Sentiment analyzer using Qwen3-4B model via LM Studio API.
+    Sentiment analyzer using Qwen3-VL-8B model via LM Studio API.
     
     Performs multi-dimensional sentiment analysis on financial narratives,
     extracting optimism, risk, and uncertainty scores with confidence metrics.
@@ -88,7 +88,7 @@ class SentimentAnalyzer:
     def __init__(self):
         """Initialize the sentiment analyzer with LM Studio configuration."""
         self.settings = get_settings()
-        self.model_name = self.settings.model_name
+        self.model_name = self.settings.model_name.strip()
         self.api_url = self.settings.model_api_url.rstrip('/')
         self.api_timeout = self.settings.model_api_timeout
         self.max_tokens = self.settings.model_max_tokens
@@ -200,7 +200,16 @@ Focus on financial context, management tone, forward guidance, and strategic pos
                 timeout=self.api_timeout
             )
             
-            response.raise_for_status()
+            if response.status_code != 200:
+                error_detail = response.text
+                try:
+                    error_json = response.json()
+                    if 'error' in error_json:
+                        error_detail = error_json['error'].get('message', error_detail)
+                except:
+                    pass
+                logger.error(f"LM Studio API error ({response.status_code}): {error_detail}")
+                raise ModelInferenceError(f"LM Studio API request failed with {response.status_code}: {error_detail}")
             
             response_data = response.json()
             
@@ -333,7 +342,7 @@ Focus on financial context, management tone, forward guidance, and strategic pos
             prompt = self._build_analysis_prompt(text, section_type)
             
             # Call LLM API
-            logger.info("Starting sentiment analysis with Qwen3-4B")
+            logger.info("Starting sentiment analysis with Qwen3-VL-8B")
             api_response = self._call_llm_api(prompt)
             
             # Parse response

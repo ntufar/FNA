@@ -151,26 +151,39 @@ async def process_report_background(report_id: str):
             if not report:
                 return
 
-            # Run processing pipeline (extract text, analyze via local LLM, generate embeddings)
-            processing_result = processor.process_financial_report(report, include_embeddings=True)
+            try:
+                # Run processing pipeline (extract text, analyze via local LLM, generate embeddings)
+                processing_result = processor.process_financial_report(report, include_embeddings=True)
 
-            # Persist results if successful
-            if processing_result.narrative_analysis:
-                analysis: NarrativeAnalysis = processing_result.narrative_analysis
-                db.add(analysis)
+                # Persist results if successful
+                if processing_result.narrative_analysis:
+                    analysis: NarrativeAnalysis = processing_result.narrative_analysis
+                    db.add(analysis)
 
-            if processing_result.embeddings:
-                for emb in processing_result.embeddings:
-                    db.add(emb)
+                if processing_result.embeddings:
+                    for emb in processing_result.embeddings:
+                        db.add(emb)
+                
+                db.flush()
+            except Exception as e:
+                logger.error(f"Processing failed for report {report_id}: {str(e)}")
+                report.set_failed()
+                db.flush()
+                # We don't re-raise here to allow the context manager to commit the FAILED status
+                return
 
-            # Report status changes are applied to report by processor; flush/commit handled by context
-            # Ensure objects are flushed so IDs are available
-            db.flush()
-
-            # Nothing else; context manager will commit
     except Exception as e:
-        # Best-effort logging; avoid crashing background task
-        print(f"Error processing report {report_id}: {e}")
+        # Catch-all for errors outside the DB context (e.g. processor init)
+        logger.error(f"Fatal error in background task for report {report_id}: {str(e)}")
+        # Try one last time to update status if we have the report_id
+        try:
+             with get_db_session_context() as db:
+                report_uuid = uuid.UUID(report_id)
+                report = db.query(FinancialReport).filter(FinancialReport.id == report_uuid).first()
+                if report:
+                    report.set_failed()
+        except:
+            pass
 
 
 # Request/Response models
@@ -342,13 +355,13 @@ async def list_reports(
             company_id=str(r.company_id),
             company_name=r.company.company_name if r.company else None,
             ticker_symbol=r.company.ticker_symbol if r.company else None,
-            report_type=r.report_type.value if r.report_type else "Other",
+            report_type=str(r.report_type) if r.report_type else "Other",
             fiscal_period=r.fiscal_period,
             filing_date=r.filing_date.isoformat() if r.filing_date else None,
-            file_format=r.file_format.value if r.file_format else "TXT",
+            file_format=str(r.file_format) if r.file_format else "TXT",
             file_size_bytes=r.file_size_bytes,
-            download_source=r.download_source.value if r.download_source else "MANUAL_UPLOAD",
-            processing_status=r.processing_status.value if r.processing_status else "PENDING",
+            download_source=str(r.download_source) if r.download_source else "MANUAL_UPLOAD",
+            processing_status=str(r.processing_status) if r.processing_status else "PENDING",
             created_at=r.created_at.isoformat() if r.created_at else datetime.now(timezone.utc).isoformat(),
             processed_at=r.processed_at.isoformat() if r.processed_at else None,
         ))
@@ -358,6 +371,7 @@ async def list_reports(
 
 @router.post("/upload", response_model=ReportUploadResponse)
 async def upload_report(
+    background_tasks: BackgroundTasks,
     company_id: str = Form(...),
     report_type: str = Form("Other"),
     fiscal_period: Optional[str] = Form(None),
@@ -427,6 +441,10 @@ async def upload_report(
         db.add(new_report)
         db.commit()
         db.refresh(new_report)
+        
+        # Add background task for processing
+        if background_tasks:
+            background_tasks.add_task(process_report_background, str(new_report.id))
         
         return ReportUploadResponse(
             report_id=str(new_report.id),
@@ -718,6 +736,10 @@ async def download_from_sec(
         db.commit()
         db.refresh(new_report)
         
+        # Add background task for processing
+        if background_tasks:
+            background_tasks.add_task(process_report_background, str(new_report.id))
+        
         return ReportUploadResponse(
             report_id=str(new_report.id),
             message=f"SEC.gov report downloaded successfully for {download_request.ticker_symbol} ({download_request.report_type})",
@@ -758,13 +780,13 @@ async def get_report(
         company_id=str(r.company_id),
         company_name=r.company.company_name if r.company else None,
         ticker_symbol=r.company.ticker_symbol if r.company else None,
-        report_type=r.report_type.value if r.report_type else "Other",
+        report_type=str(r.report_type) if r.report_type else "Other",
         fiscal_period=r.fiscal_period,
         filing_date=r.filing_date.isoformat() if r.filing_date else None,
-        file_format=r.file_format.value if r.file_format else "TXT",
+        file_format=str(r.file_format) if r.file_format else "TXT",
         file_size_bytes=r.file_size_bytes,
-        download_source=r.download_source.value if r.download_source else "MANUAL_UPLOAD",
-        processing_status=r.processing_status.value if r.processing_status else "PENDING",
+        download_source=str(r.download_source) if r.download_source else "MANUAL_UPLOAD",
+        processing_status=str(r.processing_status) if r.processing_status else "PENDING",
         created_at=r.created_at.isoformat() if r.created_at else datetime.now(timezone.utc).isoformat(),
         processed_at=r.processed_at.isoformat() if r.processed_at else None,
     )
@@ -859,7 +881,7 @@ async def get_report_analysis(
         narrative_sections=analysis.narrative_sections or {},
         financial_metrics=analysis.financial_metrics,
         processing_time_seconds=analysis.processing_time_seconds,
-        model_version=analysis.model_version or "qwen3-4b-2507",
+        model_version=analysis.model_version or "qwen3-vl-8b",
         created_at=analysis.created_at.isoformat()
     )
 
@@ -867,6 +889,7 @@ async def get_report_analysis(
 @router.post("/{report_id}/analyze")
 async def reanalyze_report(
     report_id: str,
+    background_tasks: BackgroundTasks,
     current_user: Dict[str, Any] = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -885,11 +908,15 @@ async def reanalyze_report(
     report.updated_at = datetime.now(timezone.utc)
     db.add(report)
     db.commit()
+    
+    # Add background task for processing
+    if background_tasks:
+        background_tasks.add_task(process_report_background, str(report.id))
 
     return {
         "report_id": report_id,
         "message": "Report status reset to PENDING. Use CLI to process.",
-        "processing_status": ProcessingStatus.PENDING.value,
+        "processing_status": str(ProcessingStatus.PENDING),
     }
 
 
@@ -1083,13 +1110,13 @@ async def update_report_status(
         company_id=str(report.company_id),
         company_name=report.company.company_name if report.company else None,
         ticker_symbol=report.company.ticker_symbol if report.company else None,
-        report_type=report.report_type.value if report.report_type else "Other",
+        report_type=str(report.report_type) if report.report_type else "Other",
         fiscal_period=report.fiscal_period,
         filing_date=report.filing_date.isoformat() if report.filing_date else None,
-        file_format=report.file_format.value if report.file_format else "TXT",
+        file_format=str(report.file_format) if report.file_format else "TXT",
         file_size_bytes=report.file_size_bytes,
-        download_source=report.download_source.value if report.download_source else "MANUAL_UPLOAD",
-        processing_status=report.processing_status.value if report.processing_status else "PENDING",
+        download_source=str(report.download_source) if report.download_source else "MANUAL_UPLOAD",
+        processing_status=str(report.processing_status) if report.processing_status else "PENDING",
         created_at=report.created_at.isoformat() if report.created_at else datetime.now(timezone.utc).isoformat(),
         processed_at=report.processed_at.isoformat() if report.processed_at else None,
     )

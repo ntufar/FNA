@@ -45,8 +45,9 @@ class EmbeddingService:
         self._is_loaded = False
         
         if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            raise ImportError(
-                "sentence-transformers not available. Install with: pip install sentence-transformers"
+            logger.warning(
+                "sentence-transformers not available. Vector search features will be disabled. "
+                "Install with: pip install sentence-transformers"
             )
     
     def _ensure_cache_dir(self) -> Path:

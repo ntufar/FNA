@@ -38,9 +38,9 @@ npm install
 ```bash
 # Download and install LM Studio from https://lmstudio.ai/
 # 1. Open LM Studio
-# 2. Go to "Discover" tab and search for "qwen/qwen3-4b-2507"  
+# 2. Go to "Discover" tab and search for "qwen/qwen3-vl-8b"  
 # 3. Download the model (recommend Q4_K_M quantization)
-# 4. Go to "Chat" tab and load the qwen/qwen3-4b-2507 model
+# 4. Go to "Chat" tab and load the qwen/qwen3-vl-8b model
 # 5. Go to "Local Server" tab and start server on http://127.0.0.1:1234
 # 6. Keep LM Studio running during FNA development/usage
 
@@ -72,8 +72,8 @@ Create `backend/.env` file:
 # Database (localhost PostgreSQL with credentials)
 DATABASE_URL=postgresql://postgres:qwerty123@localhost:5432/fna_development
 
-# LLM Configuration (qwen/qwen3-4b-2507 via LM Studio)
-MODEL_NAME=qwen/qwen3-4b-2507
+# LLM Configuration (qwen/qwen3-vl-8b via LM Studio)
+MODEL_NAME=qwen/qwen3-vl-8b
 MODEL_API_URL=http://127.0.0.1:1234
 MODEL_API_TIMEOUT=30
 MODEL_MAX_TOKENS=512
@@ -107,7 +107,7 @@ VITE_APP_TITLE="FNA Platform - Development"
 ```bash
 cd backend
 
-# Test LM Studio connection (ensure LM Studio is running with qwen/qwen3-4b-2507 loaded)
+# Test LM Studio connection (ensure LM Studio is running with qwen/qwen3-vl-8b loaded)
 python scripts/test_lm_studio.py
 
 # Start FastAPI development server

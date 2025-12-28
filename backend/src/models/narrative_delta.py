@@ -10,7 +10,7 @@ from sqlalchemy import Column, Float, ForeignKey, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID
 
-from .base import Base
+from .base import BaseModel
 import enum
 
 
@@ -22,7 +22,7 @@ class ShiftSignificance(enum.Enum):
     CRITICAL = "CRITICAL"
 
 
-class NarrativeDelta(Base):
+class NarrativeDelta(BaseModel):
     """
     Narrative delta model representing comparison between two analyses.
     

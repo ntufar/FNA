@@ -99,7 +99,7 @@ model_cache/
 *.gguf
 *.bin
 *.safetensors
-models/
+# llm_models/  # Renamed to avoid matching src/models
 checkpoints/
 
 # Temporary files

@@ -17,6 +17,11 @@ depends_on = None
 
 
 def upgrade() -> None:
+    from sqlalchemy import inspect
+    
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
     tables = [
         "financial_reports",
         "narrative_analyses",
@@ -26,10 +31,12 @@ def upgrade() -> None:
     ]
 
     for table in tables:
-        with op.batch_alter_table(table) as batch_op:
-            batch_op.add_column(
-                sa.Column("updated_at", sa.TIMESTAMP, nullable=False, server_default=sa.func.now())
-            )
+        columns = [c['name'] for c in inspector.get_columns(table)]
+        if "updated_at" not in columns:
+            with op.batch_alter_table(table) as batch_op:
+                batch_op.add_column(
+                    sa.Column("updated_at", sa.TIMESTAMP, nullable=False, server_default=sa.func.now())
+                )
 
 
 def downgrade() -> None:

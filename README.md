@@ -68,30 +68,43 @@ npm run dev
 
 ### Configuration (.env)
 
-Create `backend/.env` to override defaults from `src/core/config.py`. Useful keys:
+Create `backend/.env` to override defaults from `src/core/config.py`. The application uses these variables for startup and runtime behavior.
 
 ```dotenv
+# --- Application Mode ---
 # Environment: development | testing | production
 ENVIRONMENT=development
+# Enable/disable debug mode (True/False)
+DEBUG=True
+# Logging level: DEBUG | INFO | WARNING | ERROR | CRITICAL
+LOG_LEVEL=DEBUG
 
-# Database
-DATABASE_URL=postgresql://postgres:qwerty123@localhost:5432/fna_development
+# --- Database ---
+# Format: postgresql://[user]:[password]@[host]:[port]/[database]
+# Note: On macOS with Homebrew, the user often defaults to your system username (e.g., ntufar)
+DATABASE_URL=postgresql://postgres:passwordofthepostgresuser@localhost:5432/fna_development
 
-# Security / Auth (change for production)
+# --- Security / Auth ---
+# CRITICAL: Change SECRET_KEY for production
 SECRET_KEY=dev-secret-key-change-in-production
 JWT_EXPIRE_HOURS=24
 JWT_REFRESH_EXPIRE_DAYS=7
 JWT_ALGORITHM=HS256
 
-# CORS
+# --- CORS Settings ---
+# Comma-separated list of allowed origins
 CORS_ORIGINS=http://localhost:5173,http://127.0.0.1:5173
 
-# LM Studio (optional local LLM)
-MODEL_NAME=qwen/qwen3-4b-2507
+# --- LLM / Analysis (LM Studio fallback) ---
+# See docs/LM_STUDIO_SETUP.md
+MODEL_NAME=qwen/qwen3-vl-8b
 MODEL_API_URL=http://127.0.0.1:1234
-MODEL_API_TIMEOUT=30
+MODEL_API_TIMEOUT=60
+MODEL_MAX_TOKENS=10000
+MODEL_TEMPERATURE=0.1
 
-# SEC API
+# --- SEC API ---
+# Identification for SEC.gov (Required by SEC policy)
 SEC_USER_AGENT=FNACompany contact@fnacompany.com
 SEC_REQUEST_RATE_LIMIT=10
 ```

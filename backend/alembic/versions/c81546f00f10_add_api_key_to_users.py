@@ -85,249 +85,340 @@ def upgrade() -> None:
     """))
     
     # Add columns with nullable=True first, then update with defaults, then set to NOT NULL
-    op.add_column("alerts", sa.Column("delta_id", sa.UUID(), nullable=True))
-    op.add_column(
-        "alerts",
-        sa.Column("actual_change_percentage", sa.Float(), nullable=True),
-    )
-    op.add_column(
-        "alerts", sa.Column("alert_message", sa.Text(), nullable=True)
-    )
-    op.add_column("alerts", sa.Column("is_read", sa.Boolean(), nullable=True, server_default='false'))
-    op.add_column(
-        "alerts",
-        sa.Column(
-            "delivery_method",
-            sa.Enum("IN_APP", "EMAIL", "WEBHOOK", name="deliverymethod", create_type=False),
-            nullable=True,
-            server_default=text("'IN_APP'::deliverymethod"),
-        ),
-    )
-    op.add_column(
-        "alerts", sa.Column("delivered_at", sa.DateTime(), nullable=True)
-    )
+    from sqlalchemy import inspect
+    conn = op.get_bind()
+    inspector = inspect(conn)
+    
+    alert_columns = [c['name'] for c in inspector.get_columns('alerts')]
+    
+    if "delta_id" not in alert_columns:
+        op.add_column("alerts", sa.Column("delta_id", sa.UUID(), nullable=True))
+    if "actual_change_percentage" not in alert_columns:
+        op.add_column("alerts", sa.Column("actual_change_percentage", sa.Float(), nullable=True))
+    if "alert_message" not in alert_columns:
+        op.add_column("alerts", sa.Column("alert_message", sa.Text(), nullable=True))
+    if "is_read" not in alert_columns:
+        op.add_column("alerts", sa.Column("is_read", sa.Boolean(), nullable=True, server_default='false'))
+    if "delivery_method" not in alert_columns:
+        op.add_column(
+            "alerts",
+            sa.Column(
+                "delivery_method",
+                sa.Enum("IN_APP", "EMAIL", "WEBHOOK", name="deliverymethod", create_type=False),
+                nullable=True,
+                server_default=text("'IN_APP'::deliverymethod"),
+            ),
+        )
+    if "delivered_at" not in alert_columns:
+        op.add_column("alerts", sa.Column("delivered_at", sa.DateTime(), nullable=True))
+
     # Convert alert_type column from VARCHAR to enum using explicit cast
-    op.execute(text("""
-        ALTER TABLE alerts 
-        ALTER COLUMN alert_type TYPE alerttype 
-        USING alert_type::alerttype
-    """))
+    # Check if column is already of type alerttype
+    try:
+        op.execute(text("""
+            ALTER TABLE alerts 
+            ALTER COLUMN alert_type TYPE alerttype 
+            USING alert_type::alerttype
+        """))
+    except Exception:
+        pass
+
     # Set default values for new columns before making them NOT NULL
     # Only update if there are existing alerts
-    op.execute(text("""
-        UPDATE alerts 
-        SET delta_id = COALESCE(
-            (SELECT id FROM narrative_deltas LIMIT 1),
-            '00000000-0000-0000-0000-000000000000'::uuid
+    try:
+        op.execute(text("""
+            UPDATE alerts 
+            SET delta_id = COALESCE(
+                (SELECT id FROM narrative_deltas LIMIT 1),
+                '00000000-0000-0000-0000-000000000000'::uuid
+            )
+            WHERE delta_id IS NULL
+        """))
+        op.execute(text("UPDATE alerts SET actual_change_percentage = 0.0 WHERE actual_change_percentage IS NULL"))
+        op.execute(text("UPDATE alerts SET alert_message = 'Alert triggered' WHERE alert_message IS NULL"))
+    except Exception:
+        pass
+    
+    # Now make columns NOT NULL (only if they aren't already)
+    try:
+        op.alter_column("alerts", "delta_id", nullable=False)
+        op.alter_column("alerts", "actual_change_percentage", nullable=False)
+        op.alter_column("alerts", "alert_message", nullable=False)
+        op.alter_column("alerts", "is_read", nullable=False)
+        op.alter_column("alerts", "delivery_method", nullable=False)
+        
+        op.alter_column(
+            "alerts",
+            "threshold_percentage",
+            existing_type=sa.DOUBLE_PRECISION(precision=53),
+            nullable=False,
         )
-        WHERE delta_id IS NULL
-    """))
-    op.execute(text("UPDATE alerts SET actual_change_percentage = 0.0 WHERE actual_change_percentage IS NULL"))
-    op.execute(text("UPDATE alerts SET alert_message = 'Alert triggered' WHERE alert_message IS NULL"))
+    except Exception:
+        pass
+
+    alert_indexes = [i['name'] for i in inspector.get_indexes('alerts')]
+    if "ix_alerts_alert_type" not in alert_indexes:
+        op.create_index(op.f("ix_alerts_alert_type"), "alerts", ["alert_type"], unique=False)
+    if "ix_alerts_company_id" not in alert_indexes:
+        op.create_index(op.f("ix_alerts_company_id"), "alerts", ["company_id"], unique=False)
+    if "ix_alerts_delta_id" not in alert_indexes:
+        op.create_index(op.f("ix_alerts_delta_id"), "alerts", ["delta_id"], unique=False)
+    if "ix_alerts_is_read" not in alert_indexes:
+        op.create_index(op.f("ix_alerts_is_read"), "alerts", ["is_read"], unique=False)
+    if "ix_alerts_user_id" not in alert_indexes:
+        op.create_index(op.f("ix_alerts_user_id"), "alerts", ["user_id"], unique=False)
+
+    try:
+        op.drop_index("idx_alerts_active", table_name="alerts")
+        op.drop_index("idx_alerts_company", table_name="alerts")
+        op.drop_index("idx_alerts_user", table_name="alerts")
+    except Exception:
+        pass
+
+    alert_fks = [f['name'] for f in inspector.get_foreign_keys('alerts')]
+    if "fk_alerts_delta" not in alert_fks:
+        try:
+            op.create_foreign_key(None, "alerts", "narrative_deltas", ["delta_id"], ["id"])
+        except Exception:
+            pass
     
-    # Now make columns NOT NULL
-    op.alter_column("alerts", "delta_id", nullable=False)
-    op.alter_column("alerts", "actual_change_percentage", nullable=False)
-    op.alter_column("alerts", "alert_message", nullable=False)
-    op.alter_column("alerts", "is_read", nullable=False)
-    op.alter_column("alerts", "delivery_method", nullable=False)
+    # Check if constraints exist before dropping
+    try:
+        op.drop_constraint("alerts_company_id_fkey", "alerts", type_="foreignkey")
+    except Exception:
+        pass
+    try:
+        op.drop_constraint("alerts_user_id_fkey", "alerts", type_="foreignkey")
+    except Exception:
+        pass
+
+    try:
+        op.create_foreign_key(None, "alerts", "users", ["user_id"], ["id"])
+        op.create_foreign_key(None, "alerts", "companies", ["company_id"], ["id"])
+    except Exception:
+        pass
     
-    op.alter_column(
-        "alerts",
-        "threshold_percentage",
-        existing_type=sa.DOUBLE_PRECISION(precision=53),
-        nullable=False,
-    )
-    op.drop_index("idx_alerts_active", table_name="alerts")
-    op.drop_index("idx_alerts_company", table_name="alerts")
-    op.drop_index("idx_alerts_user", table_name="alerts")
-    op.create_index(
-        op.f("ix_alerts_alert_type"), "alerts", ["alert_type"], unique=False
-    )
-    op.create_index(
-        op.f("ix_alerts_company_id"), "alerts", ["company_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_alerts_delta_id"), "alerts", ["delta_id"], unique=False
-    )
-    op.create_index(
-        op.f("ix_alerts_is_read"), "alerts", ["is_read"], unique=False
-    )
-    op.create_index(
-        op.f("ix_alerts_user_id"), "alerts", ["user_id"], unique=False
-    )
-    op.drop_constraint("alerts_company_id_fkey", "alerts", type_="foreignkey")
-    op.drop_constraint("alerts_user_id_fkey", "alerts", type_="foreignkey")
-    op.create_foreign_key(
-        None, "alerts", "narrative_deltas", ["delta_id"], ["id"]
-    )
-    op.create_foreign_key(None, "alerts", "users", ["user_id"], ["id"])
-    op.create_foreign_key(None, "alerts", "companies", ["company_id"], ["id"])
-    op.drop_column("alerts", "is_active")
-    op.drop_constraint(
-        "companies_ticker_symbol_key", "companies", type_="unique"
-    )
-    op.drop_index("idx_companies_industry", table_name="companies")
-    op.drop_index("idx_companies_sector", table_name="companies")
-    op.drop_index("idx_companies_ticker", table_name="companies")
-    op.drop_index("idx_companies_ticker_symbol", table_name="companies")
-    op.create_index(
-        op.f("ix_companies_industry"), "companies", ["industry"], unique=False
-    )
-    op.create_index(
-        op.f("ix_companies_sector"), "companies", ["sector"], unique=False
-    )
-    op.create_index(
-        op.f("ix_companies_ticker_symbol"),
-        "companies",
-        ["ticker_symbol"],
-        unique=True,
-    )
+    if "is_active" in alert_columns:
+        op.drop_column("alerts", "is_active")
+    try:
+        op.drop_constraint(
+            "companies_ticker_symbol_key", "companies", type_="unique"
+        )
+    except Exception:
+        pass
+    
+    try:
+        op.drop_index("idx_companies_industry", table_name="companies")
+        op.drop_index("idx_companies_sector", table_name="companies")
+        op.drop_index("idx_companies_ticker", table_name="companies")
+        op.drop_index("idx_companies_ticker_symbol", table_name="companies")
+    except Exception:
+        pass
+        
+    try:
+        op.create_index(
+            op.f("ix_companies_industry"), "companies", ["industry"], unique=False
+        )
+        op.create_index(
+            op.f("ix_companies_sector"), "companies", ["sector"], unique=False
+        )
+        op.create_index(
+            op.f("ix_companies_ticker_symbol"),
+            "companies",
+            ["ticker_symbol"],
+            unique=True,
+        )
+    except Exception:
+        pass
+        
     # Convert financial_reports.report_type column to enum type
-    op.execute(text("""
-        ALTER TABLE financial_reports 
-        ALTER COLUMN report_type TYPE reporttype 
-        USING report_type::reporttype
-    """))
-    op.alter_column(
-        "financial_reports",
-        "fiscal_period",
-        existing_type=sa.VARCHAR(length=20),
-        nullable=True,
-    )
-    op.execute(text("""
-        ALTER TABLE financial_reports 
-        ALTER COLUMN file_format TYPE fileformat 
-        USING file_format::fileformat
-    """))
-    op.execute(text("""
-        ALTER TABLE financial_reports 
-        ALTER COLUMN download_source TYPE downloadsource 
-        USING download_source::downloadsource
-    """))
+    try:
+        op.execute(text("""
+            ALTER TABLE financial_reports 
+            ALTER COLUMN report_type TYPE reporttype 
+            USING report_type::reporttype
+        """))
+    except Exception:
+        pass
+        
+    try:
+        op.alter_column(
+            "financial_reports",
+            "fiscal_period",
+            existing_type=sa.VARCHAR(length=20),
+            nullable=True,
+        )
+    except Exception:
+        pass
+        
+    try:
+        op.execute(text("""
+            ALTER TABLE financial_reports 
+            ALTER COLUMN file_format TYPE fileformat 
+            USING file_format::fileformat
+        """))
+    except Exception:
+        pass
+        
+    try:
+        op.execute(text("""
+            ALTER TABLE financial_reports 
+            ALTER COLUMN download_source TYPE downloadsource 
+            USING download_source::downloadsource
+        """))
+    except Exception:
+        pass
     # Drop old default, convert type, then set new default
-    op.execute(text("""
-        ALTER TABLE financial_reports 
-        ALTER COLUMN processing_status DROP DEFAULT
-    """))
-    op.execute(text("""
-        ALTER TABLE financial_reports 
-        ALTER COLUMN processing_status TYPE processingstatus 
-        USING processing_status::processingstatus
-    """))
-    op.execute(text("""
-        ALTER TABLE financial_reports 
-        ALTER COLUMN processing_status SET DEFAULT 'PENDING'::processingstatus
-    """))
-    op.drop_index(
-        "idx_financial_reports_company", table_name="financial_reports"
-    )
-    op.drop_index(
-        "idx_financial_reports_company_filing_date",
-        table_name="financial_reports",
-    )
-    op.drop_index(
-        "idx_financial_reports_filing_date", table_name="financial_reports"
-    )
-    op.drop_index(
-        "idx_financial_reports_status", table_name="financial_reports"
-    )
-    op.drop_index("idx_financial_reports_type", table_name="financial_reports")
-    op.create_index(
-        op.f("ix_financial_reports_company_id"),
-        "financial_reports",
-        ["company_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_financial_reports_download_source"),
-        "financial_reports",
-        ["download_source"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_financial_reports_file_format"),
-        "financial_reports",
-        ["file_format"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_financial_reports_filing_date"),
-        "financial_reports",
-        ["filing_date"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_financial_reports_processing_status"),
-        "financial_reports",
-        ["processing_status"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_financial_reports_report_type"),
-        "financial_reports",
-        ["report_type"],
-        unique=False,
-    )
-    op.drop_constraint(
-        "financial_reports_company_id_fkey",
-        "financial_reports",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        None, "financial_reports", "companies", ["company_id"], ["id"]
-    )
-    op.alter_column(
-        "narrative_analyses",
-        "key_themes",
-        existing_type=postgresql.JSONB(astext_type=sa.Text()),
-        type_=sa.JSON(),
-        existing_nullable=False,
-    )
-    op.alter_column(
-        "narrative_analyses",
-        "risk_indicators",
-        existing_type=postgresql.JSONB(astext_type=sa.Text()),
-        type_=sa.JSON(),
-        existing_nullable=False,
-    )
-    op.alter_column(
-        "narrative_analyses",
-        "narrative_sections",
-        existing_type=postgresql.JSONB(astext_type=sa.Text()),
-        type_=sa.JSON(),
-        existing_nullable=False,
-    )
-    op.alter_column(
-        "narrative_analyses",
-        "financial_metrics",
-        existing_type=postgresql.JSONB(astext_type=sa.Text()),
-        type_=sa.JSON(),
-        existing_nullable=True,
-    )
-    op.drop_index(
-        "idx_narrative_analyses_created", table_name="narrative_analyses"
-    )
-    op.drop_index(
-        "idx_narrative_analyses_report", table_name="narrative_analyses"
-    )
-    op.drop_index(
-        "idx_narrative_analyses_report_id", table_name="narrative_analyses"
-    )
-    op.create_index(
-        op.f("ix_narrative_analyses_report_id"),
-        "narrative_analyses",
-        ["report_id"],
-        unique=False,
-    )
-    op.drop_constraint(
-        "narrative_analyses_report_id_fkey",
-        "narrative_analyses",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        None, "narrative_analyses", "financial_reports", ["report_id"], ["id"]
-    )
+    try:
+        op.execute(text("""
+            ALTER TABLE financial_reports 
+            ALTER COLUMN processing_status DROP DEFAULT
+        """))
+        op.execute(text("""
+            ALTER TABLE financial_reports 
+            ALTER COLUMN processing_status TYPE processingstatus 
+            USING processing_status::processingstatus
+        """))
+        op.execute(text("""
+            ALTER TABLE financial_reports 
+            ALTER COLUMN processing_status SET DEFAULT 'PENDING'::processingstatus
+        """))
+    except Exception:
+        pass
+    
+    try:
+        op.drop_index(
+            "idx_financial_reports_company", table_name="financial_reports"
+        )
+        op.drop_index(
+            "idx_financial_reports_company_filing_date",
+            table_name="financial_reports",
+        )
+        op.drop_index(
+            "idx_financial_reports_filing_date", table_name="financial_reports"
+        )
+        op.drop_index(
+            "idx_financial_reports_status", table_name="financial_reports"
+        )
+        op.drop_index("idx_financial_reports_type", table_name="financial_reports")
+    except Exception:
+        pass
+    financial_reports_indexes = [i['name'] for i in inspector.get_indexes('financial_reports')]
+    if "ix_financial_reports_company_id" not in financial_reports_indexes:
+        op.create_index(
+            op.f("ix_financial_reports_company_id"),
+            "financial_reports",
+            ["company_id"],
+            unique=False,
+        )
+    if "ix_financial_reports_download_source" not in financial_reports_indexes:
+        op.create_index(
+            op.f("ix_financial_reports_download_source"),
+            "financial_reports",
+            ["download_source"],
+            unique=False,
+        )
+    if "ix_financial_reports_file_format" not in financial_reports_indexes:
+        op.create_index(
+            op.f("ix_financial_reports_file_format"),
+            "financial_reports",
+            ["file_format"],
+            unique=False,
+        )
+    if "ix_financial_reports_filing_date" not in financial_reports_indexes:
+        op.create_index(
+            op.f("ix_financial_reports_filing_date"),
+            "financial_reports",
+            ["filing_date"],
+            unique=False,
+        )
+    if "ix_financial_reports_processing_status" not in financial_reports_indexes:
+        op.create_index(
+            op.f("ix_financial_reports_processing_status"),
+            "financial_reports",
+            ["processing_status"],
+            unique=False,
+        )
+    if "ix_financial_reports_report_type" not in financial_reports_indexes:
+        op.create_index(
+            op.f("ix_financial_reports_report_type"),
+            "financial_reports",
+            ["report_type"],
+            unique=False,
+        )
+
+    financial_reports_fks = [f['name'] for f in inspector.get_foreign_keys('financial_reports')]
+    # We don't have the auto-generated name here, so we check referent table
+    if not any(f['referred_table'] == 'companies' for f in financial_reports_fks):
+        try:
+            op.create_foreign_key(
+                None, "financial_reports", "companies", ["company_id"], ["id"]
+            )
+        except Exception:
+            pass
+    
+    analysis_columns = [c['name'] for c in inspector.get_columns('narrative_analyses')]
+    if "key_themes" in analysis_columns:
+        op.alter_column(
+            "narrative_analyses",
+            "key_themes",
+            existing_type=postgresql.JSONB(astext_type=sa.Text()),
+            type_=sa.JSON(),
+            existing_nullable=False,
+        )
+    if "risk_indicators" in analysis_columns:
+        op.alter_column(
+            "narrative_analyses",
+            "risk_indicators",
+            existing_type=postgresql.JSONB(astext_type=sa.Text()),
+            type_=sa.JSON(),
+            existing_nullable=False,
+        )
+    if "narrative_sections" in analysis_columns:
+        op.alter_column(
+            "narrative_analyses",
+            "narrative_sections",
+            existing_type=postgresql.JSONB(astext_type=sa.Text()),
+            type_=sa.JSON(),
+            existing_nullable=False,
+        )
+    if "financial_metrics" in analysis_columns:
+        op.alter_column(
+            "narrative_analyses",
+            "financial_metrics",
+            existing_type=postgresql.JSONB(astext_type=sa.Text()),
+            type_=sa.JSON(),
+            existing_nullable=True,
+        )
+    
+    analysis_indexes = [i['name'] for i in inspector.get_indexes('narrative_analyses')]
+    try:
+        if "idx_narrative_analyses_created" in analysis_indexes:
+            op.drop_index("idx_narrative_analyses_created", table_name="narrative_analyses")
+        if "idx_narrative_analyses_report" in analysis_indexes:
+            op.drop_index("idx_narrative_analyses_report", table_name="narrative_analyses")
+        if "idx_narrative_analyses_report_id" in analysis_indexes:
+            op.drop_index("idx_narrative_analyses_report_id", table_name="narrative_analyses")
+    except Exception:
+        pass
+    
+    if "ix_narrative_analyses_report_id" not in analysis_indexes:
+        op.create_index(
+            op.f("ix_narrative_analyses_report_id"),
+            "narrative_analyses",
+            ["report_id"],
+            unique=False,
+        )
+    
+    analysis_fks = [f['name'] for f in inspector.get_foreign_keys('narrative_analyses')]
+    if not any(f['referred_table'] == 'financial_reports' for f in analysis_fks):
+        try:
+            op.create_foreign_key(
+                None, "narrative_analyses", "financial_reports", ["report_id"], ["id"]
+            )
+        except Exception:
+            pass
+
     # Convert shift_significance enum (handle both old and new enum names)
     op.execute(text("""
         DO $$ 
@@ -346,110 +437,165 @@ def upgrade() -> None:
                 NULL;
         END $$;
     """))
-    op.drop_index("idx_narrative_deltas_base", table_name="narrative_deltas")
-    op.drop_index(
-        "idx_narrative_deltas_company_created", table_name="narrative_deltas"
-    )
-    op.drop_index(
-        "idx_narrative_deltas_company_id", table_name="narrative_deltas"
-    )
-    op.drop_index(
-        "idx_narrative_deltas_comparison", table_name="narrative_deltas"
-    )
-    op.drop_index(
-        "idx_narrative_deltas_shift_significance",
-        table_name="narrative_deltas",
-    )
-    op.create_index(
-        op.f("ix_narrative_deltas_base_analysis_id"),
-        "narrative_deltas",
-        ["base_analysis_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_narrative_deltas_company_id"),
-        "narrative_deltas",
-        ["company_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_narrative_deltas_comparison_analysis_id"),
-        "narrative_deltas",
-        ["comparison_analysis_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_narrative_deltas_shift_significance"),
-        "narrative_deltas",
-        ["shift_significance"],
-        unique=False,
-    )
-    op.drop_constraint(
-        "narrative_deltas_comparison_analysis_id_fkey",
-        "narrative_deltas",
-        type_="foreignkey",
-    )
-    op.drop_constraint(
-        "narrative_deltas_base_analysis_id_fkey",
-        "narrative_deltas",
-        type_="foreignkey",
-    )
-    op.drop_constraint(
-        "fk_narrative_deltas_company_id",
-        "narrative_deltas",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        None,
-        "narrative_deltas",
-        "narrative_analyses",
-        ["base_analysis_id"],
-        ["id"],
-    )
-    op.create_foreign_key(
-        None, "narrative_deltas", "companies", ["company_id"], ["id"]
-    )
-    op.create_foreign_key(
-        None,
-        "narrative_deltas",
-        "narrative_analyses",
-        ["comparison_analysis_id"],
-        ["id"],
-    )
-    op.drop_column("narrative_deltas", "significant_changes")
-    op.drop_column("narrative_deltas", "delta_summary")
-    op.drop_index(
-        "idx_narrative_embeddings_analysis_section",
-        table_name="narrative_embeddings",
-    )
-    op.drop_constraint(
-        "narrative_embeddings_analysis_id_fkey",
-        "narrative_embeddings",
-        type_="foreignkey",
-    )
-    op.create_foreign_key(
-        None,
-        "narrative_embeddings",
-        "narrative_analyses",
-        ["analysis_id"],
-        ["id"],
-    )
-    op.add_column(
-        "users", sa.Column("api_key_hash", sa.String(length=64), nullable=True)
-    )
-    op.drop_index("idx_users_email", table_name="users")
-    op.drop_index("idx_users_subscription_tier", table_name="users")
-    op.drop_constraint("users_email_key", "users", type_="unique")
-    op.create_index(
-        op.f("ix_users_api_key_hash"), "users", ["api_key_hash"], unique=True
-    )
-    op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
-    op.create_index(
-        op.f("ix_users_subscription_tier"),
-        "users",
-        ["subscription_tier"],
-        unique=False,
-    )
+    delta_indexes = [i['name'] for i in inspector.get_indexes('narrative_deltas')]
+    try:
+        if "idx_narrative_deltas_base" in delta_indexes:
+            op.drop_index("idx_narrative_deltas_base", table_name="narrative_deltas")
+        if "idx_narrative_deltas_company_created" in delta_indexes:
+            op.drop_index("idx_narrative_deltas_company_created", table_name="narrative_deltas")
+        if "idx_narrative_deltas_company_id" in delta_indexes:
+            op.drop_index("idx_narrative_deltas_company_id", table_name="narrative_deltas")
+        if "idx_narrative_deltas_comparison" in delta_indexes:
+            op.drop_index("idx_narrative_deltas_comparison", table_name="narrative_deltas")
+        if "idx_narrative_deltas_shift_significance" in delta_indexes:
+            op.drop_index("idx_narrative_deltas_shift_significance", table_name="narrative_deltas")
+    except Exception:
+        pass
+        
+    if "ix_narrative_deltas_base_analysis_id" not in delta_indexes:
+        op.create_index(
+            op.f("ix_narrative_deltas_base_analysis_id"),
+            "narrative_deltas",
+            ["base_analysis_id"],
+            unique=False,
+        )
+    if "ix_narrative_deltas_company_id" not in delta_indexes:
+        op.create_index(
+            op.f("ix_narrative_deltas_company_id"),
+            "narrative_deltas",
+            ["company_id"],
+            unique=False,
+        )
+    if "ix_narrative_deltas_comparison_analysis_id" not in delta_indexes:
+        op.create_index(
+            op.f("ix_narrative_deltas_comparison_analysis_id"),
+            "narrative_deltas",
+            ["comparison_analysis_id"],
+            unique=False,
+        )
+    if "ix_narrative_deltas_shift_significance" not in delta_indexes:
+        op.create_index(
+            op.f("ix_narrative_deltas_shift_significance"),
+            "narrative_deltas",
+            ["shift_significance"],
+            unique=False,
+        )
+    
+    delta_fks = [f['name'] for f in inspector.get_foreign_keys('narrative_deltas')]
+    try:
+        if "narrative_deltas_comparison_analysis_id_fkey" in delta_fks:
+            op.drop_constraint(
+                "narrative_deltas_comparison_analysis_id_fkey",
+                "narrative_deltas",
+                type_="foreignkey",
+            )
+        if "narrative_deltas_base_analysis_id_fkey" in delta_fks:
+            op.drop_constraint(
+                "narrative_deltas_base_analysis_id_fkey",
+                "narrative_deltas",
+                type_="foreignkey",
+            )
+        if "fk_narrative_deltas_company_id" in delta_fks:
+            op.drop_constraint(
+                "fk_narrative_deltas_company_id",
+                "narrative_deltas",
+                type_="foreignkey",
+            )
+    except Exception:
+        pass
+
+    if not any(f['referred_table'] == 'narrative_analyses' and f['constrained_columns'] == ['base_analysis_id'] for f in delta_fks):
+        try:
+            op.create_foreign_key(
+                None,
+                "narrative_deltas",
+                "narrative_analyses",
+                ["base_analysis_id"],
+                ["id"],
+            )
+        except Exception:
+            pass
+    if not any(f['referred_table'] == 'companies' for f in delta_fks):
+        try:
+            op.create_foreign_key(
+                None, "narrative_deltas", "companies", ["company_id"], ["id"]
+            )
+        except Exception:
+            pass
+    if not any(f['referred_table'] == 'narrative_analyses' and f['constrained_columns'] == ['comparison_analysis_id'] for f in delta_fks):
+        try:
+            op.create_foreign_key(
+                None,
+                "narrative_deltas",
+                "narrative_analyses",
+                ["comparison_analysis_id"],
+                ["id"],
+            )
+        except Exception:
+            pass
+    delta_columns = [c['name'] for c in inspector.get_columns('narrative_deltas')]
+    if "significant_changes" in delta_columns:
+        op.drop_column("narrative_deltas", "significant_changes")
+    if "delta_summary" in delta_columns:
+        op.drop_column("narrative_deltas", "delta_summary")
+        
+    # Embeddings
+    embedding_indexes = [i['name'] for i in inspector.get_indexes('narrative_embeddings')]
+    if "idx_narrative_embeddings_analysis_section" in embedding_indexes:
+        op.drop_index(
+            "idx_narrative_embeddings_analysis_section",
+            table_name="narrative_embeddings",
+        )
+    
+    embedding_fks = [f['name'] for f in inspector.get_foreign_keys('narrative_embeddings')]
+    if not any(f['referred_table'] == 'narrative_analyses' for f in embedding_fks):
+        try:
+            op.create_foreign_key(
+                None,
+                "narrative_embeddings",
+                "narrative_analyses",
+                ["analysis_id"],
+                ["id"],
+            )
+        except Exception:
+            pass
+            
+    # Users
+    user_columns = [c['name'] for c in inspector.get_columns('users')]
+    if "api_key_hash" not in user_columns:
+        op.add_column(
+            "users", sa.Column("api_key_hash", sa.String(length=64), nullable=True)
+        )
+    
+    user_indexes = [i['name'] for i in inspector.get_indexes('users')]
+    try:
+        if "idx_users_email" in user_indexes:
+            op.drop_index("idx_users_email", table_name="users")
+        if "idx_users_subscription_tier" in user_indexes:
+            op.drop_index("idx_users_subscription_tier", table_name="users")
+    except Exception:
+        pass
+    
+    user_constraints = [c['name'] for c in inspector.get_unique_constraints('users')]
+    try:
+        if "users_email_key" in user_constraints:
+            op.drop_constraint("users_email_key", "users", type_="unique")
+    except Exception:
+        pass
+
+    if "ix_users_api_key_hash" not in user_indexes:
+        op.create_index(
+            op.f("ix_users_api_key_hash"), "users", ["api_key_hash"], unique=True
+        )
+    if "ix_users_email" not in user_indexes:
+        op.create_index(op.f("ix_users_email"), "users", ["email"], unique=True)
+    if "ix_users_subscription_tier" not in user_indexes:
+        op.create_index(
+            op.f("ix_users_subscription_tier"),
+            "users",
+            ["subscription_tier"],
+            unique=False,
+        )
     # ### end Alembic commands ###
 
 
